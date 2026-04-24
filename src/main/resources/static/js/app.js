@@ -24,7 +24,15 @@ const App = {
     setup() {
         const token = ref(localStorage.getItem('zalo_bg_token') || '');
         const nickName = ref(localStorage.getItem('zalo_bg_nick') || '');
-        const loginForm = reactive({ username: '', password: '' });
+        const rememberedCred = (() => {
+            try { return JSON.parse(localStorage.getItem('zalo_bg_cred') || 'null') || {}; }
+            catch (e) { return {}; }
+        })();
+        const loginForm = reactive({
+            username: rememberedCred.username || '',
+            password: rememberedCred.password || '',
+            remember: !!rememberedCred.username
+        });
         const loginLoading = ref(false);
 
         const activeMenu = ref('accounts');
@@ -101,12 +109,21 @@ const App = {
             }
             loginLoading.value = true;
             try {
-                const { data } = await http.post('/api/auth/login', loginForm);
+                const payload = { username: loginForm.username, password: loginForm.password };
+                const { data } = await http.post('/api/auth/login', payload);
                 if (data.code === 0) {
                     token.value = data.data.token;
                     nickName.value = data.data.nickName;
                     localStorage.setItem('zalo_bg_token', token.value);
                     localStorage.setItem('zalo_bg_nick', nickName.value);
+                    if (loginForm.remember) {
+                        localStorage.setItem('zalo_bg_cred', JSON.stringify({
+                            username: loginForm.username,
+                            password: loginForm.password
+                        }));
+                    } else {
+                        localStorage.removeItem('zalo_bg_cred');
+                    }
                     ElementPlus.ElMessage.success('登录成功');
                     loadAccounts(1);
                 } else {
