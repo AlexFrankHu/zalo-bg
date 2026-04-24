@@ -8,8 +8,48 @@
 - **systemd 服务**: `zalo-bg.service`
 - **日志**: `/opt/zalo-bg/logs/app.log`
 - **jar 位置**: `/opt/zalo-bg/zalo-bg.jar`
-- **后台首页**: http://43.128.109.91:8801/
-- **Swagger**: http://43.128.109.91:8801/swagger-ui.html
+- **对外域名**: `zalo.qxh77.com` (nginx :80 反代 → 127.0.0.1:8801, HTTPS 由 Cloudflare 终结)
+- **后台首页**: https://zalo.qxh77.com/
+- **Swagger**: https://zalo.qxh77.com/swagger-ui.html
+- **静态文件镜像**: https://zalo.qxh77.com/files/*  (源于 GitHub 的 `zalo-website` 仓库, cron 自动同步, 见下)
+
+## 前端 JS 自动同步 (zalo-website 私有仓库 → /opt/zalo-bg/files/)
+
+为了向 Zalo 插件或第三方提供 `chunk-f6588e50.efaa59d3.js` 的最新版本,使用一个 GitHub
+fine-grained PAT + cron 每 2 分钟拉一次, 有变动才覆盖目标文件, 无变动不动 mtime。
+
+```
+组件                             路径                                     说明
+------------------------------  ---------------------------------------  ------------------------------------
+PAT (contents:read, 只读)        /opt/zalo-bg/bin/.pat                    0600, ubuntu:ubuntu, 只存单行 token
+同步脚本                         /opt/zalo-bg/bin/sync-js.sh              源码见 scripts/sync-js.sh
+本地工作区                       /opt/zalo-bg/src/zalo-website/           git clone --depth 1
+输出目录 (nginx 暴露)             /opt/zalo-bg/files/                      alias in /etc/nginx/sites-available/zalo-bg
+cron 条目 (ubuntu 用户)           crontab -l                               */2 * * * * /opt/zalo-bg/bin/sync-js.sh ...
+同步日志                         /var/log/zalo-bg-sync.log                只记录 UPDATED/ERROR/FATAL 行
+跟踪的分支                       $BRANCH 环境变量 (默认 feature 分支)      可在 sync-js.sh 顶部或 cron 行里覆盖
+```
+
+**如何切换到其它分支 / 文件**
+```bash
+# 暂时切分支
+BRANCH=main /opt/zalo-bg/bin/sync-js.sh
+
+# 永久切分支 — 改脚本顶部的 BRANCH 默认值
+sudoedit /opt/zalo-bg/bin/sync-js.sh
+```
+
+**如何轮换 PAT**
+```bash
+umask 177
+printf '%s' '<新的 github_pat_...>' > /opt/zalo-bg/bin/.pat
+# 下次 cron 跑时自动生效,无需重启
+```
+
+**手动触发一次同步**
+```bash
+/opt/zalo-bg/bin/sync-js.sh && tail -5 /var/log/zalo-bg-sync.log
+```
 
 ## 运维常用命令
 
