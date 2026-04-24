@@ -17,12 +17,12 @@
             </template>
             <el-form :model="loginForm" label-width="0" size="large" @submit.prevent="doLogin">
                 <el-form-item>
-                    <el-input v-model="loginForm.username" placeholder="用户名" prefix-icon="User" clearable/>
+                    <el-input v-model="loginForm.username" placeholder="用户名" prefix-icon="User" clearable></el-input>
                 </el-form-item>
                 <el-form-item>
                     <el-input v-model="loginForm.password" type="password" placeholder="密码"
                               prefix-icon="Lock" show-password
-                              @keyup.enter="doLogin"/>
+                              @keyup.enter="doLogin"></el-input>
                 </el-form-item>
                 <el-form-item>
                     <el-button type="primary" style="width:100%" :loading="loginLoading" @click="doLogin">
@@ -40,15 +40,15 @@
             <el-menu :default-active="activeMenu" @select="switchMenu" background-color="#304156"
                      text-color="#bfcbd9" active-text-color="#409EFF">
                 <el-menu-item index="accounts">
-                    <el-icon><User/></el-icon>
+                    <el-icon><User></User></el-icon>
                     <span>账号管理</span>
                 </el-menu-item>
                 <el-menu-item index="friends">
-                    <el-icon><UserFilled/></el-icon>
+                    <el-icon><UserFilled></UserFilled></el-icon>
                     <span>好友列表</span>
                 </el-menu-item>
                 <el-menu-item index="messages">
-                    <el-icon><ChatDotRound/></el-icon>
+                    <el-icon><ChatDotRound></ChatDotRound></el-icon>
                     <span>聊天记录</span>
                 </el-menu-item>
             </el-menu>
@@ -69,21 +69,21 @@
                 <div v-if="activeMenu==='accounts'">
                     <el-form inline :model="accFilter" class="filter-bar">
                         <el-form-item label="Zalo ID">
-                            <el-input v-model="accFilter.zaloId" clearable style="width:130px"/>
+                            <el-input v-model="accFilter.zaloId" clearable style="width:130px"></el-input>
                         </el-form-item>
                         <el-form-item label="手机号">
-                            <el-input v-model="accFilter.account" clearable style="width:140px"/>
+                            <el-input v-model="accFilter.account" clearable style="width:140px"></el-input>
                         </el-form-item>
                         <el-form-item label="昵称">
-                            <el-input v-model="accFilter.nickName" clearable style="width:140px"/>
+                            <el-input v-model="accFilter.nickName" clearable style="width:140px"></el-input>
                         </el-form-item>
                         <el-form-item label="部门">
-                            <el-input v-model="accFilter.deptId" clearable style="width:100px"/>
+                            <el-input v-model="accFilter.deptId" clearable style="width:100px"></el-input>
                         </el-form-item>
                         <el-form-item label="在线">
                             <el-select v-model="accFilter.online" clearable placeholder="全部" style="width:100px">
-                                <el-option label="在线" :value="1"/>
-                                <el-option label="离线" :value="2"/>
+                                <el-option label="在线" :value="1"></el-option>
+                                <el-option label="离线" :value="2"></el-option>
                             </el-select>
                         </el-form-item>
                         <el-form-item>
@@ -92,10 +92,10 @@
                         </el-form-item>
                     </el-form>
                     <el-table :data="accList" v-loading="accLoading" border stripe size="small" height="calc(100vh - 280px)">
-                        <el-table-column prop="zaloId" label="Zalo ID" width="100"/>
-                        <el-table-column prop="account" label="手机号" width="140"/>
-                        <el-table-column prop="nickName" label="昵称" min-width="160"/>
-                        <el-table-column prop="region" label="区号" width="70"/>
+                        <el-table-column prop="zaloId" label="Zalo ID" width="100"></el-table-column>
+                        <el-table-column prop="account" label="手机号" width="140"></el-table-column>
+                        <el-table-column prop="nickName" label="昵称" min-width="160"></el-table-column>
+                        <el-table-column prop="region" label="区号" width="70"></el-table-column>
                         <el-table-column label="性别" width="60">
                             <template #default="{row}">{{ sexLabel(row.sex) }}</template>
                         </el-table-column>
@@ -106,10 +106,10 @@
                                 </el-tag>
                             </template>
                         </el-table-column>
-                        <el-table-column prop="friendsSum" label="好友数" width="80"/>
-                        <el-table-column prop="msgSum" label="未读" width="70"/>
-                        <el-table-column prop="proxyIp" label="代理" show-overflow-tooltip min-width="170"/>
-                        <el-table-column prop="deptId" label="部门" width="80"/>
+                        <el-table-column prop="friendsSum" label="好友数" width="80"></el-table-column>
+                        <el-table-column prop="msgSum" label="未读" width="70"></el-table-column>
+                        <el-table-column prop="proxyIp" label="代理" show-overflow-tooltip min-width="170"></el-table-column>
+                        <el-table-column prop="deptId" label="部门" width="80"></el-table-column>
                         <el-table-column label="Zalo 创建" width="160">
                             <template #default="{row}">{{ fmtDate(row.gmtCreate) }}</template>
                         </el-table-column>
@@ -119,29 +119,29 @@
                     </el-table>
                     <el-pagination background layout="total, prev, pager, next, jumper"
                                    :total="accTotal" :current-page="accPage" :page-size="accSize"
-                                   @current-change="loadAccounts" style="margin-top:12px;justify-content:flex-end"/>
+                                   @current-change="loadAccounts" style="margin-top:12px;justify-content:flex-end"></el-pagination>
                 </div>
 
                 <!-- 好友列表 -->
                 <div v-else-if="activeMenu==='friends'">
                     <el-form inline :model="friFilter" class="filter-bar">
                         <el-form-item label="归属账号">
-                            <el-input v-model="friFilter.ownerZaloId" clearable placeholder="zaloId" style="width:130px"/>
+                            <el-input v-model="friFilter.ownerZaloId" clearable placeholder="zaloId" style="width:130px"></el-input>
                         </el-form-item>
                         <el-form-item label="好友 userId">
-                            <el-input v-model="friFilter.friendUserId" clearable style="width:140px"/>
+                            <el-input v-model="friFilter.friendUserId" clearable style="width:140px"></el-input>
                         </el-form-item>
                         <el-form-item label="显示名">
-                            <el-input v-model="friFilter.displayName" clearable style="width:160px"/>
+                            <el-input v-model="friFilter.displayName" clearable style="width:160px"></el-input>
                         </el-form-item>
                         <el-form-item label="手机号">
-                            <el-input v-model="friFilter.phone" clearable style="width:140px"/>
+                            <el-input v-model="friFilter.phone" clearable style="width:140px"></el-input>
                         </el-form-item>
                         <el-form-item label="关系">
                             <el-select v-model="friFilter.fstatus" clearable placeholder="全部" style="width:120px">
-                                <el-option label="陌生人 0" :value="0"/>
-                                <el-option label="好友 3" :value="3"/>
-                                <el-option label="非好友 5" :value="5"/>
+                                <el-option label="陌生人 0" :value="0"></el-option>
+                                <el-option label="好友 3" :value="3"></el-option>
+                                <el-option label="非好友 5" :value="5"></el-option>
                             </el-select>
                         </el-form-item>
                         <el-form-item>
@@ -150,22 +150,22 @@
                         </el-form-item>
                     </el-form>
                     <el-table :data="friList" v-loading="friLoading" border stripe size="small" height="calc(100vh - 280px)">
-                        <el-table-column prop="ownerZaloId" label="归属账号" width="110"/>
-                        <el-table-column prop="friendUserId" label="好友 userId" width="130"/>
-                        <el-table-column prop="displayName" label="显示名" min-width="170"/>
-                        <el-table-column prop="phone" label="手机号" width="140"/>
+                        <el-table-column prop="ownerZaloId" label="归属账号" width="110"></el-table-column>
+                        <el-table-column prop="friendUserId" label="好友 userId" width="130"></el-table-column>
+                        <el-table-column prop="displayName" label="显示名" min-width="170"></el-table-column>
+                        <el-table-column prop="phone" label="手机号" width="140"></el-table-column>
                         <el-table-column label="关系" width="80">
                             <template #default="{row}">{{ fstatusLabel(row.fstatus) }}</template>
                         </el-table-column>
-                        <el-table-column prop="remark" label="备注" min-width="120"/>
-                        <el-table-column prop="msgSum" label="未读" width="70"/>
+                        <el-table-column prop="remark" label="备注" min-width="120"></el-table-column>
+                        <el-table-column prop="msgSum" label="未读" width="70"></el-table-column>
                         <el-table-column label="最后消息" width="160">
                             <template #default="{row}">{{ fmtDate(row.latestMsgTime) }}</template>
                         </el-table-column>
-                        <el-table-column prop="deptId" label="部门" width="80"/>
+                        <el-table-column prop="deptId" label="部门" width="80"></el-table-column>
                         <el-table-column label="头像" width="70">
                             <template #default="{row}">
-                                <el-image v-if="row.avatar" :src="row.avatar" style="width:40px;height:40px;border-radius:4px"/>
+                                <el-image v-if="row.avatar" :src="row.avatar" style="width:40px;height:40px;border-radius:4px"></el-image>
                             </template>
                         </el-table-column>
                         <el-table-column label="入库" width="160">
@@ -174,43 +174,43 @@
                     </el-table>
                     <el-pagination background layout="total, prev, pager, next, jumper"
                                    :total="friTotal" :current-page="friPage" :page-size="friSize"
-                                   @current-change="loadFriends" style="margin-top:12px;justify-content:flex-end"/>
+                                   @current-change="loadFriends" style="margin-top:12px;justify-content:flex-end"></el-pagination>
                 </div>
 
                 <!-- 聊天记录 -->
                 <div v-else-if="activeMenu==='messages'">
                     <el-form inline :model="msgFilter" class="filter-bar">
                         <el-form-item label="归属账号">
-                            <el-input v-model="msgFilter.ownerZaloId" clearable style="width:130px"/>
+                            <el-input v-model="msgFilter.ownerZaloId" clearable style="width:130px"></el-input>
                         </el-form-item>
                         <el-form-item label="对端 userId">
-                            <el-input v-model="msgFilter.peerUserId" clearable style="width:140px"/>
+                            <el-input v-model="msgFilter.peerUserId" clearable style="width:140px"></el-input>
                         </el-form-item>
                         <el-form-item label="类型">
                             <el-select v-model="msgFilter.msgType" clearable placeholder="全部" style="width:130px">
-                                <el-option label="1 文本" :value="1"/>
-                                <el-option label="2 图片" :value="2"/>
-                                <el-option label="3 语音" :value="3"/>
-                                <el-option label="4 视频" :value="4"/>
-                                <el-option label="5 系统" :value="5"/>
-                                <el-option label="7 贴图" :value="7"/>
-                                <el-option label="8 卡片" :value="8"/>
+                                <el-option label="1 文本" :value="1"></el-option>
+                                <el-option label="2 图片" :value="2"></el-option>
+                                <el-option label="3 语音" :value="3"></el-option>
+                                <el-option label="4 视频" :value="4"></el-option>
+                                <el-option label="5 系统" :value="5"></el-option>
+                                <el-option label="7 贴图" :value="7"></el-option>
+                                <el-option label="8 卡片" :value="8"></el-option>
                             </el-select>
                         </el-form-item>
                         <el-form-item label="方向">
                             <el-select v-model="msgFilter.direction" clearable placeholder="全部" style="width:110px">
-                                <el-option label="收 (0)" :value="0"/>
-                                <el-option label="发 (1)" :value="1"/>
+                                <el-option label="收 (0)" :value="0"></el-option>
+                                <el-option label="发 (1)" :value="1"></el-option>
                             </el-select>
                         </el-form-item>
                         <el-form-item label="内容">
-                            <el-input v-model="msgFilter.contentLike" clearable style="width:180px"/>
+                            <el-input v-model="msgFilter.contentLike" clearable style="width:180px"></el-input>
                         </el-form-item>
                         <el-form-item label="时间范围">
                             <el-date-picker v-model="msgDateRange" type="datetimerange"
                                             range-separator="-" format="YYYY-MM-DD HH:mm:ss"
                                             value-format="YYYY-MM-DD HH:mm:ss"
-                                            start-placeholder="开始" end-placeholder="结束"/>
+                                            start-placeholder="开始" end-placeholder="结束"></el-date-picker>
                         </el-form-item>
                         <el-form-item>
                             <el-button type="primary" @click="loadMessages(1)">查询</el-button>
@@ -218,9 +218,9 @@
                         </el-form-item>
                     </el-form>
                     <el-table :data="msgList" v-loading="msgLoading" border stripe size="small" height="calc(100vh - 280px)">
-                        <el-table-column prop="msgId" label="msgid" width="140"/>
-                        <el-table-column prop="ownerZaloId" label="账号" width="100"/>
-                        <el-table-column prop="peerUserId" label="对端 userId" width="130"/>
+                        <el-table-column prop="msgId" label="msgid" width="140"></el-table-column>
+                        <el-table-column prop="ownerZaloId" label="账号" width="100"></el-table-column>
+                        <el-table-column prop="peerUserId" label="对端 userId" width="130"></el-table-column>
                         <el-table-column label="类型" width="80">
                             <template #default="{row}">{{ msgTypeLabel(row.msgType) }}</template>
                         </el-table-column>
@@ -231,9 +231,9 @@
                                 </el-tag>
                             </template>
                         </el-table-column>
-                        <el-table-column prop="nickname" label="昵称" width="140"/>
-                        <el-table-column prop="content" label="内容" min-width="260" show-overflow-tooltip/>
-                        <el-table-column prop="dst" label="翻译" width="140" show-overflow-tooltip/>
+                        <el-table-column prop="nickname" label="昵称" width="140"></el-table-column>
+                        <el-table-column prop="content" label="内容" min-width="260" show-overflow-tooltip></el-table-column>
+                        <el-table-column prop="dst" label="翻译" width="140" show-overflow-tooltip></el-table-column>
                         <el-table-column label="Zalo 时间" width="170">
                             <template #default="{row}">{{ fmtDate(row.gmtCreate) }}</template>
                         </el-table-column>
@@ -243,7 +243,7 @@
                     </el-table>
                     <el-pagination background layout="total, prev, pager, next, jumper"
                                    :total="msgTotal" :current-page="msgPage" :page-size="msgSize"
-                                   @current-change="loadMessages" style="margin-top:12px;justify-content:flex-end"/>
+                                   @current-change="loadMessages" style="margin-top:12px;justify-content:flex-end"></el-pagination>
                 </div>
             </el-main>
         </el-container>
