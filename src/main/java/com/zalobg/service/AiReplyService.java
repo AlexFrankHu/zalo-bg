@@ -11,7 +11,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,16 +37,24 @@ public class AiReplyService {
                 .build();
     }
 
-    /**
-     * 让 AI 围绕"游戏"主题为指定输入生成一条简短回复.
-     *
-     * @param userMessage 对方发来的原始文本
-     * @return AI 生成的回复内容(纯文本, 已去掉首尾空白)
-     */
     /** 没配 AI_API_KEY 时, 用这个固定回复占位 (接入真 AI 后自动切换). */
     private static final String FALLBACK_REPLY = "你好";
 
+    /**
+     * 一轮历史消息. role 取值 "user"(对方发来) / "assistant"(我方回复).
+     */
+    public record HistoryMessage(String role, String content) {}
+
+    /** 无上下文的单轮回复. */
     public String generateReply(String userMessage) {
+        return generateReply(userMessage, List.of());
+    }
+
+    /**
+     * 带历史上下文的多轮回复. history 按时间顺序传入 (老到新),
+     * 不含本轮的 userMessage (本轮会作为最后一条 user 消息拼接).
+     */
+    public String generateReply(String userMessage, List<HistoryMessage> history) {
         if (userMessage == null || userMessage.isBlank()) {
             throw new ApiException(400, "userMessage 不能为空");
         }
@@ -53,15 +64,22 @@ public class AiReplyService {
             return FALLBACK_REPLY;
         }
 
-        Map<String, Object> body = Map.of(
-                "model", props.getAi().getModel(),
-                "messages", List.of(
-                        Map.of("role", "system", "content", props.getAi().getSystemPrompt()),
-                        Map.of("role", "user",   "content", userMessage)
-                ),
-                "max_tokens", 200,
-                "temperature", 0.7
-        );
+        List<Map<String, Object>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", props.getAi().getSystemPrompt()));
+        if (history != null) {
+            for (HistoryMessage h : history) {
+                if (h == null || h.content() == null || h.content().isBlank()) continue;
+                String role = ("assistant".equals(h.role())) ? "assistant" : "user";
+                messages.add(Map.of("role", role, "content", h.content()));
+            }
+        }
+        messages.add(Map.of("role", "user", "content", userMessage));
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", props.getAi().getModel());
+        body.put("messages", messages);
+        body.put("max_tokens", 200);
+        body.put("temperature", 0.7);
 
         String reqBody;
         try {
@@ -74,13 +92,13 @@ public class AiReplyService {
                 .uri(URI.create(props.getAi().getBaseUrl() + "/chat/completions"))
                 .timeout(Duration.ofMillis(props.getAi().getTimeoutMs()))
                 .header("Authorization", "Bearer " + apiKey)
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(reqBody))
+                .header("Content-Type", "application/json; charset=utf-8")
+                .POST(HttpRequest.BodyPublishers.ofString(reqBody, StandardCharsets.UTF_8))
                 .build();
 
         HttpResponse<String> resp;
         try {
-            resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.error("AI 调用失败: {}", e.getMessage());
             throw new ApiException(502, "调用 AI 失败: " + e.getMessage());
