@@ -33,8 +33,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
 
-        // 采集接口走独立 token 校验
-        if (path.startsWith("/api/collect/")) {
+        // 采集接口 / AI 接口走独立 token 校验 (同一个 X-Collect-Token, 前端混用)
+        if (path.startsWith("/api/collect/") || path.startsWith("/api/ai/")) {
             String clientToken = request.getHeader("X-Collect-Token");
             if (!props.getCollect().getToken().equals(clientToken)) {
                 response.setStatus(401);

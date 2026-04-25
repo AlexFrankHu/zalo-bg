@@ -35,6 +35,7 @@ public class SecurityConfig {
                                 "/api/auth/login", "/api/health"
                         ).permitAll()
                         .requestMatchers("/api/collect/**").hasRole("COLLECT")
+                        .requestMatchers("/api/ai/**").hasRole("COLLECT")
                         .requestMatchers("/api/admin/**").hasRole("USER")
                         .anyRequest().permitAll()
                 )

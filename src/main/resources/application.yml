@@ -45,6 +45,12 @@ zalo-bg:
   collect:
     # 采集接口的共享 token, 客户端推数据时必须带这个 header
     token: ${COLLECT_TOKEN:zalo-collect-token-change-me}
+  ai:
+    # Perplexity API 接入 (用于自动回复消息)
+    base-url: ${PERPLEXITY_BASE_URL:https://api.perplexity.ai}
+    api-key: ${PERPLEXITY_API_KEY:}
+    model: ${PERPLEXITY_MODEL:sonar}
+    timeout-ms: ${PERPLEXITY_TIMEOUT_MS:30000}
 
 springdoc:
   api-docs:
