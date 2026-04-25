@@ -33,12 +33,12 @@ public class AppProps {
 
     @Data
     public static class Ai {
-        /** Perplexity API base URL. */
-        private String baseUrl = "https://api.perplexity.ai";
-        /** Perplexity API key, injected via env var PERPLEXITY_API_KEY. */
+        /** AI provider base URL (OpenAI 兼容). 默认 OpenAI; DeepSeek 改 https://api.deepseek.com 等. */
+        private String baseUrl = "https://api.openai.com/v1";
+        /** API key, injected via env var AI_API_KEY (兼容 OPENAI_API_KEY / PERPLEXITY_API_KEY). */
         private String apiKey;
-        /** Perplexity model name (sonar / sonar-pro / sonar-reasoning). */
-        private String model = "sonar";
+        /** Model name. OpenAI: gpt-4o-mini; DeepSeek: deepseek-chat; Perplexity: sonar. */
+        private String model = "gpt-4o-mini";
         /** System prompt that tells the AI how to behave when generating replies. */
         private String systemPrompt =
                 "你是一个热爱电子游戏的玩家, 性格活泼。" +

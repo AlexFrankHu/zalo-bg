@@ -3,7 +3,7 @@ package com.zalobg.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.zalobg.common.ApiException;
 import com.zalobg.common.R;
-import com.zalobg.service.PerplexityService;
+import com.zalobg.service.AiReplyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -18,19 +18,19 @@ import java.util.Map;
 
 /**
  * AI 自动回复接口. 前端把 WS code=3 收到的新消息整体转发过来,
- * 后端调 Perplexity 生成围绕游戏主题的回复后返回.
+ * 后端调 OpenAI 兼容接口 (默认 gpt-4o-mini) 生成围绕游戏主题的回复后返回.
  *
  * 鉴权方式同 /api/collect/* — 需带 Header X-Collect-Token
  * (路径前缀 /api/ai/ 已在 SecurityConfig + JwtAuthFilter 中走相同的 token 校验).
  */
 @Slf4j
-@Tag(name = "AI 接口", description = "用 Perplexity 生成自动回复内容; 需带 Header X-Collect-Token")
+@Tag(name = "AI 接口", description = "调 AI 生成自动回复内容 (默认 OpenAI gpt-4o-mini); 需带 Header X-Collect-Token")
 @RestController
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor
 public class AiController {
 
-    private final PerplexityService perplexityService;
+    private final AiReplyService aiReplyService;
 
     @Operation(summary = "根据收到的消息生成 AI 回复 (游戏主题)",
             description = "入参可以是 WS code=3 完整体 {code:3,data:{...}} 或者 {message:\"hello\"}." +
@@ -40,7 +40,7 @@ public class AiController {
         String userMessage = extractMessage(payload);
         log.info("AI reply 请求, userMessage={}", userMessage);
 
-        String reply = perplexityService.generateReply(userMessage);
+        String reply = aiReplyService.generateReply(userMessage);
         log.info("AI reply 完成, reply={}", reply);
 
         Map<String, Object> ret = new LinkedHashMap<>();
