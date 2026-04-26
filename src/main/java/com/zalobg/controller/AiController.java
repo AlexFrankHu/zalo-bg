@@ -1,6 +1,5 @@
 package com.zalobg.controller;
 
-import cn.hutool.json.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.zalobg.common.ApiException;
@@ -9,7 +8,6 @@ import com.zalobg.config.AppProps;
 import com.zalobg.entity.ZaloMessage;
 import com.zalobg.mapper.ZaloMessageMapper;
 import com.zalobg.service.AiReplyService;
-import io.swagger.v3.core.util.Json;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -19,10 +17,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -60,18 +54,16 @@ public class AiController {
         log.info("AI reply 请求, accountId={}, fid={}, userMessage={}", accountId, fid, userMessage);
 
         // 拉历史对话作为上下文 (按 owner/peer 维度, 最近 N 条, 老到新)
-//        List<AiReplyService.HistoryMessage> history = loadHistory(accountId, fid, msgId);
-//        log.info("AI reply 上下文: 取到 {} 条历史消息", history.size());
+        List<AiReplyService.HistoryMessage> history = loadHistory(accountId, fid, msgId);
+        log.info("AI reply 上下文: 取到 {} 条历史消息", history.size());
 
-        String historyContent = loadHistory2(accountId, fid, msgId);
-
-        String reply = getReply(historyContent);
+        String reply = aiReplyService.generateReply(userMessage, history);
         log.info("AI reply 完成, reply={}", reply);
 
         Map<String, Object> ret = new LinkedHashMap<>();
         ret.put("input",        userMessage);
         ret.put("reply",        reply);
-        ret.put("historyCount", 20);
+        ret.put("historyCount", history.size());
         if (accountId != null) ret.put("accountid", accountId);
         if (fid != null)       ret.put("fid",       fid);
         if (msgId != null)     ret.put("msgid",     msgId);
@@ -80,63 +72,6 @@ public class AiController {
             ret.put("nickname", data.get("nickname").asText());
         }
         return R.ok(ret);
-    }
-
-    private String getReply(String request) {
-        try {
-            HttpClient client = HttpClient.newHttpClient();
-            JSONObject jsonObject = new JSONObject();
-            jsonObject.putOnce("chat_context", request);
-
-//            String json = "{\"chat_context\":\"客服: 您好\\n用户: 你好\",\"customer_name\":\"用户\"}";
-
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create("http://localhost:8000/generate-reply"))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonObject.toString()))
-                    .build();
-
-            HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
-            System.out.println(resp.body());
-            return resp.body();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return "Hello";
-    }
-
-    private String loadHistory2(Long ownerId, Long peerId, Long currentMsgId) {
-        if (ownerId == null || peerId == null) {
-            return "";
-        }
-        int limit = 20;
-        QueryWrapper<ZaloMessage> qw = new QueryWrapper<>();
-        qw.eq("owner_zalo_id", ownerId)
-                .eq("peer_user_id",  peerId)
-                .eq("msg_type",      1)               // 只取文本消息
-                .ne("deleted",       1);
-        if (currentMsgId != null) {
-            // 排除本轮刚收到的消息(可能已经入库)
-            qw.ne("msg_id", currentMsgId);
-        }
-        qw.orderByDesc("gmt_create").last("limit " + limit);
-
-        List<ZaloMessage> rows = messageMapper.selectList(qw);
-        // 倒序拿到最新 N 条, 翻成 老→新
-        Collections.reverse(rows);
-
-        StringBuilder sb = new StringBuilder();
-
-
-        List<AiReplyService.HistoryMessage> out = new ArrayList<>(rows.size());
-        for (ZaloMessage m : rows) {
-            if (m.getContent() == null || m.getContent().isBlank()) continue;
-            // isSend == 1 → 我方发出 (assistant); 0 → 对方发来 (user)
-            String role = (m.getIsSend() != null && m.getIsSend() == 1) ? "assistant" : "user";
-//            out.add(new AiReplyService.HistoryMessage(role, m.getContent()));
-            sb.append(role).append(":").append(m.getContent()).append("\n");
-        }
-        return sb.toString();
     }
 
     private List<AiReplyService.HistoryMessage> loadHistory(Long ownerId, Long peerId, Long currentMsgId) {
