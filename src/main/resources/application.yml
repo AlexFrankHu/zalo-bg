@@ -1,0 +1,68 @@
+server:
+  port: 8801
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: zalo-bg
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:zalo_bg}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:root}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: false
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+zalo-bg:
+  auth:
+    # JWT 签名密钥 (生产环境请通过环境变量覆盖)
+    jwt-secret: ${JWT_SECRET:zalo-bg-please-change-me-to-a-secure-random-string-0123456789}
+    jwt-ttl-hours: 24
+  admin:
+    # 初始管理员账号 (首次启动时若不存在则写入)
+    username: ${ADMIN_USER:admin}
+    password: ${ADMIN_PASSWORD:admin123}
+  collect:
+    # 采集接口的共享 token, 客户端推数据时必须带这个 header
+    token: ${COLLECT_TOKEN:zalo-collect-token-change-me}
+  ai:
+    # AI 自动回复 (默认 OpenAI gpt-4o-mini, OpenAI 兼容协议; 切 DeepSeek/Qwen/Perplexity 改 base-url + model 即可)
+    base-url: ${AI_BASE_URL:https://api.openai.com/v1}
+    api-key:  ${AI_API_KEY:${OPENAI_API_KEY:${PERPLEXITY_API_KEY:}}}
+    model:    ${AI_MODEL:gpt-4o-mini}
+    timeout-ms: ${AI_TIMEOUT_MS:30000}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+logging:
+  level:
+    root: INFO
+    com.zalobg: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
