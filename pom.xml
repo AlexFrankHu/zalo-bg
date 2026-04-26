@@ -100,10 +100,31 @@
     <build>
         <finalName>zalo-bg</finalName>
         <plugins>
+            <!--
+                Thin jar + external libs/ layout:
+                * spring-boot-maven-plugin uses ZIP layout so the executable boot jar
+                  is launched through PropertiesLauncher instead of JarLauncher.
+                * A dummy <includes> (non-existent GAV) effectively excludes ALL
+                  dependencies from the boot jar. The resulting zalo-bg.jar is only
+                  the application classes + spring-boot-loader classes.
+                * Dependency jars are copied to target/libs/ by
+                  maven-dependency-plugin:copy-dependencies.
+                * Launch command:
+                    java -Dloader.path=libs -jar zalo-bg.jar
+                  (libs directory must sit next to zalo-bg.jar, or pass an absolute
+                   path, e.g. -Dloader.path=/opt/zalo-bg/libs)
+            -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
+                    <layout>ZIP</layout>
+                    <includes>
+                        <include>
+                            <groupId>__nothing__</groupId>
+                            <artifactId>__nothing__</artifactId>
+                        </include>
+                    </includes>
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>
@@ -111,6 +132,28 @@
                         </exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/libs</outputDirectory>
+                            <includeScope>runtime</includeScope>
+                            <excludeGroupIds>org.projectlombok</excludeGroupIds>
+                            <overWriteReleases>false</overWriteReleases>
+                            <overWriteSnapshots>true</overWriteSnapshots>
+                            <stripVersion>false</stripVersion>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
