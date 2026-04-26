@@ -41,9 +41,18 @@ zalo-bg/
 
 ## 快速开始 (本地)
 
+> **打包方式**: 瘦 jar + 外部 `libs/`。`mvn package` 产物:
+> - `target/zalo-bg.jar` - 约 335 KB 的应用 jar (不内嵌依赖)
+> - `target/libs/*.jar` - 约 41 MB 的运行时依赖 (74 个 jar)
+>
+> 启动时必须通过 `-Dloader.path=libs` 告诉 `PropertiesLauncher` 加载 `libs/` 里的依赖。
+
 ```bash
 mvn -DskipTests clean package
-java -jar target/zalo-bg.jar \
+
+# 注意: cd 到 target 目录, 让 loader.path=libs 指向相对目录里的 libs/
+cd target
+java -Dloader.path=libs -jar zalo-bg.jar \
   --spring.datasource.url='jdbc:mysql://127.0.0.1:3306/zalo_bg?createDatabaseIfNotExist=true&serverTimezone=Asia/Shanghai' \
   --spring.datasource.username=root \
   --spring.datasource.password=root

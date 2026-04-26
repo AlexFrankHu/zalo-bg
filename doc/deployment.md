@@ -7,7 +7,8 @@
 - **数据库**: 本机 MySQL 8, 库 `zalo_bg`, 账号 `zalo / ZaloBg@2026`
 - **systemd 服务**: `zalo-bg.service`
 - **日志**: `/opt/zalo-bg/logs/app.log`
-- **jar 位置**: `/opt/zalo-bg/zalo-bg.jar`
+- **jar 位置**: `/opt/zalo-bg/zalo-bg.jar` (瘦 jar, 约 335 KB, 不内嵌依赖)
+- **依赖 jar 目录**: `/opt/zalo-bg/libs/` (74 个外部依赖 jar, 约 41 MB)
 - **对外域名**: `zalo.qxh77.com` (nginx :80 反代 → 127.0.0.1:8801, HTTPS 由 Cloudflare 终结)
 - **后台首页**: https://zalo.qxh77.com/
 - **Swagger**: https://zalo.qxh77.com/swagger-ui.html
@@ -91,17 +92,78 @@ sudo systemctl restart zalo-bg
 
 ## 从源码重新构建并部署
 
+**打包方式说明**: 本项目采用"瘦 jar + 外部 `libs/`"布局(不使用 fat jar), 便于只替换单个依赖而不必重打全部。见 `pom.xml` 里 `spring-boot-maven-plugin` 的 `<layout>ZIP</layout>` + `maven-dependency-plugin:copy-dependencies` 配置。
+
+产物(`mvn package` 之后 `target/` 下):
+- `target/zalo-bg.jar` - 瘦应用 jar (约 335 KB), 只含应用代码 + `spring-boot-loader`(提供 `PropertiesLauncher` 主类)
+- `target/libs/*.jar` - 所有运行时依赖 (约 41 MB, 74 个 jar)
+
+启动时通过 `-Dloader.path=libs` 告诉 `PropertiesLauncher` 去 `libs/` 里扫依赖。
+
+### 更新完整包(首次或重大升级)
+
 ```bash
-# 在你本地 clone 仓库
+# 本地 clone
 git clone https://github.com/AlexFrankHu/zalo-bg.git
 cd zalo-bg
 mvn -DskipTests clean package
-# 产物: target/zalo-bg.jar
 
-# 上传到服务器
-scp target/zalo-bg.jar ubuntu@43.128.109.91:/opt/zalo-bg/zalo-bg.jar
-ssh ubuntu@43.128.109.91 "sudo systemctl restart zalo-bg"
+# 打 tarball 上传, 保留目录结构
+tar czf /tmp/zalo-bg-dist.tgz -C target zalo-bg.jar libs
+scp /tmp/zalo-bg-dist.tgz ubuntu@43.128.109.91:/tmp/
+
+# SSH 到服务器, 备份原产物, 解压新产物, 重启
+ssh ubuntu@43.128.109.91 bash <<'EOF'
+  TS=$(date +%Y%m%d-%H%M%S)
+  sudo mkdir -p /opt/zalo-bg/backups
+  sudo cp /opt/zalo-bg/zalo-bg.jar /opt/zalo-bg/backups/zalo-bg.jar.$TS 2>/dev/null || true
+  sudo cp -r /opt/zalo-bg/libs /opt/zalo-bg/backups/libs.$TS 2>/dev/null || true
+  sudo rm -rf /opt/zalo-bg/libs
+  sudo tar xzf /tmp/zalo-bg-dist.tgz -C /opt/zalo-bg/
+  sudo chown -R ubuntu:ubuntu /opt/zalo-bg/zalo-bg.jar /opt/zalo-bg/libs
+  rm /tmp/zalo-bg-dist.tgz
+  sudo systemctl restart zalo-bg
+  sleep 3
+  sudo systemctl status zalo-bg --no-pager -l | head -15
+EOF
 ```
+
+### 只更新应用代码(依赖未变, 最常见的场景)
+
+```bash
+mvn -DskipTests clean package
+scp target/zalo-bg.jar ubuntu@43.128.109.91:/tmp/zalo-bg-new.jar
+ssh ubuntu@43.128.109.91 bash <<'EOF'
+  TS=$(date +%Y%m%d-%H%M%S)
+  sudo cp /opt/zalo-bg/zalo-bg.jar /opt/zalo-bg/backups/zalo-bg.jar.$TS
+  sudo mv /tmp/zalo-bg-new.jar /opt/zalo-bg/zalo-bg.jar
+  sudo chown ubuntu:ubuntu /opt/zalo-bg/zalo-bg.jar
+  sudo systemctl restart zalo-bg
+EOF
+```
+
+### 只更新 / 新增单个依赖 jar(比如 hotfix 某个 lib 版本)
+
+```bash
+# 假设要更新的依赖 jar 叫 foo-1.2.3.jar
+scp target/libs/foo-1.2.3.jar ubuntu@43.128.109.91:/tmp/
+ssh ubuntu@43.128.109.91 bash <<'EOF'
+  # 如果是版本号升级, 先删旧版
+  sudo rm -f /opt/zalo-bg/libs/foo-1.2.2.jar
+  sudo mv /tmp/foo-1.2.3.jar /opt/zalo-bg/libs/
+  sudo chown ubuntu:ubuntu /opt/zalo-bg/libs/foo-1.2.3.jar
+  sudo systemctl restart zalo-bg
+EOF
+```
+
+### 增量同步 libs(依赖新增了几个, 但大部分不变)
+
+```bash
+rsync -avz --delete target/libs/ ubuntu@43.128.109.91:/opt/zalo-bg/libs/
+ssh ubuntu@43.128.109.91 'sudo systemctl restart zalo-bg'
+```
+
+> 注: `--delete` 让 rsync 把服务器上多余的老 lib 也清掉, 避免 classpath 上同时存在新旧两个版本。
 
 ## 初次安装(从零搭建同样的服务器)
 
@@ -118,9 +180,12 @@ GRANT ALL PRIVILEGES ON zalo_bg.* TO 'zalo'@'localhost';
 FLUSH PRIVILEGES;
 SQL
 
-# 3. 放置 jar
-sudo mkdir -p /opt/zalo-bg/logs
+# 3. 放置 jar 与 libs
+sudo mkdir -p /opt/zalo-bg/logs /opt/zalo-bg/backups
 sudo chown -R ubuntu:ubuntu /opt/zalo-bg
+# 把本地构建产物的 zalo-bg.jar 与 libs/ 都放到 /opt/zalo-bg/ 下
+#   /opt/zalo-bg/zalo-bg.jar
+#   /opt/zalo-bg/libs/*.jar
 
 # 4. systemd 服务
 sudo tee /etc/systemd/system/zalo-bg.service <<'EOF'
@@ -136,7 +201,8 @@ Environment=DB_PASSWORD=ZaloBg@2026
 Environment=JWT_SECRET=<换成你自己的 32 字节随机 hex>
 Environment=COLLECT_TOKEN=<换成你自己的随机 hex>
 Environment=ADMIN_PASSWORD=<换成强密码>
-ExecStart=/usr/bin/java -Xms256m -Xmx1g -jar /opt/zalo-bg/zalo-bg.jar
+# 瘦 jar + 外部 libs/ 方式启动: -Dloader.path 指向 libs 目录
+ExecStart=/usr/bin/java -Xms256m -Xmx1g -Dloader.path=/opt/zalo-bg/libs -jar /opt/zalo-bg/zalo-bg.jar
 Restart=on-failure
 StandardOutput=append:/opt/zalo-bg/logs/app.log
 StandardError=append:/opt/zalo-bg/logs/app.log
