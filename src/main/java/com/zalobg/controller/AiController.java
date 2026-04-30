@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.zalobg.common.ApiException;
 import com.zalobg.common.R;
 import com.zalobg.config.AppProps;
+import com.zalobg.entity.ZaloFriend;
 import com.zalobg.entity.ZaloMessage;
+import com.zalobg.mapper.ZaloFriendMapper;
 import com.zalobg.mapper.ZaloMessageMapper;
 import com.zalobg.service.AiReplyService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,7 +41,11 @@ public class AiController {
 
     private final AiReplyService aiReplyService;
     private final ZaloMessageMapper messageMapper;
+    private final ZaloFriendMapper friendMapper;
     private final AppProps props;
+
+    /** ged 兜底值 — 当 zalo_friend 没记录或 gender 字段为空时使用 (业务约定). */
+    private static final int DEFAULT_GED = 2;
 
     @Operation(summary = "根据收到的消息生成 AI 回复 (游戏主题, 自动结合历史聊天记录)",
             description = "入参可以是 WS code=3 完整体 {code:3,data:{accountid,fid,content,...}} 或者 {message:\"hello\"}. " +
@@ -50,8 +56,11 @@ public class AiController {
         Long accountId = extractLong(payload, "accountid");
         Long fid       = extractLong(payload, "fid");
         Long msgId     = extractLong(payload, "msgid");
+        String accountNickname = extractAccountNickname(payload);
+        Integer ged = lookupFriendGed(accountId, fid);
 
-        log.info("AI reply 请求, accountId={}, fid={}, userMessage={}", accountId, fid, userMessage);
+        log.info("AI reply 请求, accountId={}, accountNickname={}, fid={}, ged={}, userMessage={}",
+                accountId, accountNickname, fid, ged, userMessage);
 
         // 拉历史对话作为上下文 (按 owner/peer 维度, 最近 N 条, 老到新)
         List<AiReplyService.HistoryMessage> history = loadHistory(accountId, fid, msgId);
@@ -64,9 +73,11 @@ public class AiController {
         ret.put("input",        userMessage);
         ret.put("reply",        reply);
         ret.put("historyCount", history.size());
-        if (accountId != null) ret.put("accountid", accountId);
-        if (fid != null)       ret.put("fid",       fid);
-        if (msgId != null)     ret.put("msgid",     msgId);
+        if (accountId != null)        ret.put("accountid",       accountId);
+        if (accountNickname != null)  ret.put("accountNickname", accountNickname);
+        if (fid != null)              ret.put("fid",             fid);
+        if (msgId != null)            ret.put("msgid",           msgId);
+        ret.put("ged", ged);
         JsonNode data = payload == null ? null : payload.get("data");
         if (data != null && data.isObject() && data.hasNonNull("nickname")) {
             ret.put("nickname", data.get("nickname").asText());
@@ -135,5 +146,37 @@ public class AiController {
             try { return Long.parseLong(v.asText()); } catch (Exception ignore) { return null; }
         }
         return null;
+    }
+
+    /** 从请求里抽 accountNickname (顶层优先, 兼容 data.accountNickname). */
+    private String extractAccountNickname(JsonNode payload) {
+        if (payload == null) return null;
+        JsonNode v = payload.hasNonNull("accountNickname") ? payload.get("accountNickname") : null;
+        if (v == null) {
+            JsonNode data = payload.get("data");
+            if (data != null && data.isObject() && data.hasNonNull("accountNickname")) {
+                v = data.get("accountNickname");
+            }
+        }
+        if (v == null || v.isNull()) return null;
+        String s = v.asText();
+        return (s == null || s.isBlank()) ? null : s;
+    }
+
+    /** 查 zalo_friend.gender 作为目标好友的 ged 标识, 查不到或为空时返回兜底值 2. */
+    private Integer lookupFriendGed(Long ownerId, Long friendUserId) {
+        if (ownerId == null || friendUserId == null) {
+            return DEFAULT_GED;
+        }
+        QueryWrapper<ZaloFriend> qw = new QueryWrapper<>();
+        qw.eq("owner_zalo_id",  ownerId)
+          .eq("friend_user_id", friendUserId)
+          .ne("deleted",        1)
+          .last("limit 1");
+        ZaloFriend f = friendMapper.selectOne(qw);
+        if (f == null || f.getGender() == null) {
+            return DEFAULT_GED;
+        }
+        return f.getGender();
     }
 }
