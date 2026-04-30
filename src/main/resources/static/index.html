@@ -174,10 +174,38 @@
                         <el-table-column label="入库" width="160">
                             <template #default="{row}">{{ fmtDate(row.collectedAt) }}</template>
                         </el-table-column>
+                        <el-table-column label="聊天内容" width="160" fixed="right">
+                            <template #default="{row}">
+                                <el-button size="small" type="primary" @click="openChatDialog(row)">查看</el-button>
+                                <el-button size="small" @click="exportChat(row)">导出</el-button>
+                            </template>
+                        </el-table-column>
                     </el-table>
                     <el-pagination background layout="total, prev, pager, next, jumper"
                                    :total="friTotal" :current-page="friPage" :page-size="friSize"
                                    @current-change="loadFriends" style="margin-top:12px;justify-content:flex-end"></el-pagination>
+
+                    <!-- 聊天记录弹窗 -->
+                    <el-dialog v-model="chatDialogVisible" :title="chatDialogTitle" width="700px" top="5vh"
+                               destroy-on-close class="chat-dialog">
+                        <div v-loading="chatLoading" class="chat-container">
+                            <div v-if="chatMessages.length===0 && !chatLoading" style="text-align:center;color:#999;padding:40px 0">暂无聊天记录</div>
+                            <div v-for="msg in chatMessages" :key="msg.id"
+                                 :class="['chat-row', msg.direction===0 ? 'chat-left' : 'chat-right']">
+                                <div class="chat-meta">
+                                    <span class="chat-nick">{{ msg.direction===0 ? (msg.nickname||'好友') : '我' }}</span>
+                                    <span class="chat-time">{{ fmtDate(msg.gmtCreate) }}</span>
+                                    <span class="chat-type">[{{ msgTypeLabel(msg.msgType) }}]</span>
+                                </div>
+                                <div class="chat-bubble">
+                                    <span v-if="msg.msgType===2 && msg.content && msg.content.startsWith('http')">
+                                        <el-image :src="msg.content" style="max-width:200px;max-height:200px" fit="contain" :preview-src-list="[msg.content]"></el-image>
+                                    </span>
+                                    <span v-else>{{ msg.content || '[' + msgTypeLabel(msg.msgType) + ']' }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </el-dialog>
                 </div>
 
                 <!-- 聊天记录 -->

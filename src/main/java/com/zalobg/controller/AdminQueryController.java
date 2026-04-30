@@ -13,6 +13,7 @@ import com.zalobg.mapper.ZaloMessageMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,7 +21,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Tag(name = "管理后台查询 (Query)", description = "只读查询接口, 均需 JWT")
 @RestController
@@ -88,6 +95,69 @@ public class AdminQueryController {
         w.orderByDesc(ZaloFriend::getLatestMsgTime);
         IPage<ZaloFriend> p = friendMapper.selectPage(Page.of(page, size), w);
         return R.ok(p);
+    }
+
+    // ---------- 会话聊天记录 (查看 / 导出) ----------
+
+    @Operation(summary = "查询某账号与某好友的完整聊天记录 (按时间升序, 无分页, 上限 5000)")
+    @GetMapping("/chat-history")
+    public R<List<ZaloMessage>> chatHistory(
+            @Parameter(description = "归属账号 ID", required = true) @RequestParam Long ownerZaloId,
+            @Parameter(description = "好友 userId", required = true) @RequestParam Long peerUserId
+    ) {
+        List<ZaloMessage> rows = queryChatHistory(ownerZaloId, peerUserId);
+        return R.ok(rows);
+    }
+
+    @Operation(summary = "导出某账号与某好友的聊天记录 (CSV)")
+    @GetMapping("/chat-history/export")
+    public void exportChatHistory(
+            @Parameter(description = "归属账号 ID", required = true) @RequestParam Long ownerZaloId,
+            @Parameter(description = "好友 userId", required = true) @RequestParam Long peerUserId,
+            HttpServletResponse response
+    ) throws IOException {
+        List<ZaloMessage> rows = queryChatHistory(ownerZaloId, peerUserId);
+
+        String filename = "chat_" + ownerZaloId + "_" + peerUserId + ".csv";
+        response.setContentType("text/csv; charset=UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=" + filename);
+        response.getOutputStream().write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
+
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        try (PrintWriter w = new PrintWriter(new OutputStreamWriter(response.getOutputStream(), StandardCharsets.UTF_8))) {
+            w.println("\"msgId\",\"方向\",\"昵称\",\"消息类型\",\"内容\",\"时间\"");
+            for (ZaloMessage m : rows) {
+                String dir = (m.getDirection() != null && m.getDirection() == 0) ? "收" : "发";
+                String type = msgTypeCn(m.getMsgType());
+                String time = (m.getGmtCreate() != null) ? m.getGmtCreate().format(dtf) : "";
+                String content = (m.getContent() != null) ? m.getContent().replace("\"", "\"\"") : "";
+                String nick = (m.getNickname() != null) ? m.getNickname().replace("\"", "\"\"") : "";
+                w.println("\"" + m.getMsgId() + "\",\"" + dir + "\",\"" + nick + "\",\"" + type + "\",\"" + content + "\",\"" + time + "\"");
+            }
+        }
+    }
+
+    private List<ZaloMessage> queryChatHistory(Long ownerZaloId, Long peerUserId) {
+        LambdaQueryWrapper<ZaloMessage> w = new LambdaQueryWrapper<>();
+        w.eq(ZaloMessage::getOwnerZaloId, ownerZaloId)
+         .eq(ZaloMessage::getPeerUserId, peerUserId)
+         .orderByAsc(ZaloMessage::getGmtCreate)
+         .last("limit 5000");
+        return messageMapper.selectList(w);
+    }
+
+    private String msgTypeCn(Integer t) {
+        if (t == null) return "未知";
+        switch (t) {
+            case 1: return "文本";
+            case 2: return "图片";
+            case 3: return "语音";
+            case 4: return "视频";
+            case 5: return "系统";
+            case 7: return "贴图";
+            case 8: return "卡片";
+            default: return String.valueOf(t);
+        }
     }
 
     // ---------- 消息 ----------
