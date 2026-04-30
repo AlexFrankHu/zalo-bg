@@ -70,6 +70,55 @@ const App = {
             } finally { friLoading.value = false; }
         };
 
+        // ----- 聊天记录弹窗 -----
+        const chatDialogVisible = ref(false);
+        const chatDialogTitle = ref('');
+        const chatMessages = ref([]);
+        const chatLoading = ref(false);
+
+        const openChatDialog = async (row) => {
+            chatDialogTitle.value = '聊天记录: ' + (row.displayName || row.friendUserId) + ' (归属 ' + row.ownerZaloId + ')';
+            chatDialogVisible.value = true;
+            chatMessages.value = [];
+            chatLoading.value = true;
+            try {
+                const { data } = await http.get('/api/admin/chat-history', {
+                    params: { ownerZaloId: row.ownerZaloId, peerUserId: row.friendUserId }
+                });
+                chatMessages.value = data.data || [];
+            } catch (e) {
+                ElementPlus.ElMessage.error('加载聊天记录失败');
+            } finally {
+                chatLoading.value = false;
+            }
+        };
+
+        const exportChat = (row) => {
+            const token = localStorage.getItem('zalo_bg_token');
+            const url = '/api/admin/chat-history/export?ownerZaloId=' + row.ownerZaloId + '&peerUserId=' + row.friendUserId;
+            const a = document.createElement('a');
+            // Use fetch to include auth header
+            fetch(url, { headers: { 'Authorization': 'Bearer ' + token } })
+                .then(r => {
+                    if (!r.ok) {
+                        if (r.status === 401) { localStorage.removeItem('zalo_bg_token'); localStorage.removeItem('zalo_bg_nick'); window.location.reload(); }
+                        throw new Error('HTTP ' + r.status);
+                    }
+                    return r.blob();
+                })
+                .then(blob => {
+                    const blobUrl = URL.createObjectURL(blob);
+                    a.href = blobUrl;
+                    a.download = 'chat_' + row.ownerZaloId + '_' + row.friendUserId + '.csv';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(blobUrl);
+                }).catch(() => {
+                    ElementPlus.ElMessage.error('导出失败');
+                });
+        };
+
         // ----- 消息 -----
         const msgFilter = reactive({ ownerZaloId:'', peerUserId:'', groupId:'', msgType:'', direction:'', contentLike:'' });
         const msgDateRange = ref([]);
@@ -161,6 +210,7 @@ const App = {
             activeMenu, menuTitle, switchMenu,
             accFilter, accList, accTotal, accPage, accSize, accLoading, loadAccounts, resetAccFilter,
             friFilter, friList, friTotal, friPage, friSize, friLoading, loadFriends, resetFriFilter,
+            chatDialogVisible, chatDialogTitle, chatMessages, chatLoading, openChatDialog, exportChat,
             msgFilter, msgDateRange, msgList, msgTotal, msgPage, msgSize, msgLoading, loadMessages, resetMsgFilter,
             fmtDate, sexLabel, fstatusLabel, msgTypeLabel
         };

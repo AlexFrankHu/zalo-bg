@@ -33,3 +33,26 @@ html, body, #app { height: 100%; margin: 0; padding: 0; font-family: -apple-syst
     border-radius: 4px; margin-bottom: 12px;
     border: 1px solid #e4e7ed;
 }
+
+/* ---- 聊天记录弹窗 (微信风格) ---- */
+.chat-dialog .el-dialog__body { padding: 0; }
+.chat-container {
+    max-height: 70vh; overflow-y: auto; padding: 16px 20px;
+    background: #f0f0f0;
+}
+.chat-row { display: flex; flex-direction: column; margin-bottom: 16px; }
+.chat-left { align-items: flex-start; }
+.chat-right { align-items: flex-end; }
+
+.chat-meta { font-size: 11px; color: #999; margin-bottom: 3px; }
+.chat-meta .chat-nick { font-weight: 600; margin-right: 6px; }
+.chat-meta .chat-time { margin-right: 6px; }
+.chat-meta .chat-type { color: #b0b0b0; }
+
+.chat-bubble {
+    max-width: 70%; padding: 10px 14px; border-radius: 8px;
+    font-size: 14px; line-height: 1.5; word-break: break-word;
+    position: relative;
+}
+.chat-left .chat-bubble { background: #fff; color: #333; border-top-left-radius: 2px; }
+.chat-right .chat-bubble { background: #95ec69; color: #333; border-top-right-radius: 2px; }
