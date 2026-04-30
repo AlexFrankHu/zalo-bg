@@ -99,7 +99,13 @@ const App = {
             const a = document.createElement('a');
             // Use fetch to include auth header
             fetch(url, { headers: { 'Authorization': 'Bearer ' + token } })
-                .then(r => r.blob())
+                .then(r => {
+                    if (!r.ok) {
+                        if (r.status === 401) { localStorage.removeItem('zalo_bg_token'); localStorage.removeItem('zalo_bg_nick'); window.location.reload(); }
+                        throw new Error('HTTP ' + r.status);
+                    }
+                    return r.blob();
+                })
                 .then(blob => {
                     const blobUrl = URL.createObjectURL(blob);
                     a.href = blobUrl;
