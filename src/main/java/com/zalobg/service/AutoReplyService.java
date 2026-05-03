@@ -91,20 +91,26 @@ public class AutoReplyService {
             return Optional.empty();
         }
 
-        Integer ged = lookupFriendGed(accountId, fid);
-        log.info("[自动回复] 触发: accountId={}, accountNickname={}, fid={}, nickname={}, ged={}, msgId={}, content={}",
-                accountId, accountNickname, fid, nickname, ged, msgId, content);
-
-        List<AiReplyService.HistoryMessage> history = loadHistory(accountId, fid, msgId);
-        log.info("[自动回复] 上下文: 取到 {} 条历史消息", history.size());
-
+        // 从进 dedupe 那一刻起, 任意下游失败 (DB 查询 / AI 调用) 都要回滚 dedupe 条目,
+        // 否则这条 msgId 会被"假占位"锁住 30 分钟, 实际却没回复成功. 同时把异常吞掉不外抛 —
+        // 本方法由 CollectController 在 collectMessages 入库成功后再调用, 绝不能让这里的失败
+        // 把已经落库的采集结果变成 500.
+        Integer ged;
+        List<AiReplyService.HistoryMessage> history;
         String reply;
         try {
+            ged = lookupFriendGed(accountId, fid);
+            log.info("[自动回复] 触发: accountId={}, accountNickname={}, fid={}, nickname={}, ged={}, msgId={}, content={}",
+                    accountId, accountNickname, fid, nickname, ged, msgId, content);
+
+            history = loadHistory(accountId, fid, msgId);
+            log.info("[自动回复] 上下文: 取到 {} 条历史消息", history.size());
+
             reply = aiReplyService.generateReply(content, history);
         } catch (Exception e) {
-            // AI 调用失败: 撤回 dedupe 条目, 这样下一次轮询还能再试; 但本次响应里不携带 autoReply
             repliedMsgIds.remove(msgId);
-            log.warn("[自动回复] AI 调用失败, 不返回 autoReply 字段 (dedupe 已撤回): {}", e.getMessage());
+            log.warn("[自动回复] 生成 reply 失败 (dedupe 已撤回, 不返回 autoReply): {}",
+                    e.getMessage(), e);
             return Optional.empty();
         }
         log.info("[自动回复] AI 回复生成: {}", reply);
