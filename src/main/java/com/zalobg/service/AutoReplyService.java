@@ -21,8 +21,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 在采集聊天记录 (/api/collect/messages) 的同步流程里, 根据最新一条消息判断是否需要
- * AI 自动回复. 命中条件时调用 {@link AiReplyService} 生成回复内容, 返回给客户端由客户端
- * 完成 sendTextMsg. 历史逻辑里客户端调 /api/ai/reply 的做法已废弃.
+ * AI 自动回复. 命中条件时调用独立的 auto-reply 微服务 ({@link AutoReplyClient}) 生成
+ * 回复内容, 返回给客户端由客户端完成 sendTextMsg. 历史逻辑里客户端调 /api/ai/reply 的
+ * 做法以及 zalo-bg 内置 AiReplyService 直接调 OpenAI 的做法都已废弃.
  */
 @Slf4j
 @Service
@@ -35,7 +36,7 @@ public class AutoReplyService {
     /** msgId 级别的去重 TTL. 30 分钟内同一条消息只回复一次 (对抗 15s 轮询重复触发). */
     private static final long DEDUPE_TTL_MS = 30L * 60L * 1000L;
 
-    private final AiReplyService aiReplyService;
+    private final AutoReplyClient autoReplyClient;
     private final ZaloMessageMapper messageMapper;
     private final ZaloFriendMapper friendMapper;
     private final AppProps props;
@@ -96,7 +97,7 @@ public class AutoReplyService {
         // 本方法由 CollectController 在 collectMessages 入库成功后再调用, 绝不能让这里的失败
         // 把已经落库的采集结果变成 500.
         Integer ged;
-        List<AiReplyService.HistoryMessage> history;
+        List<AutoReplyClient.HistoryMessage> history;
         String reply;
         try {
             ged = lookupFriendGed(accountId, fid);
@@ -106,7 +107,7 @@ public class AutoReplyService {
             history = loadHistory(accountId, fid, msgId);
             log.info("[自动回复] 上下文: 取到 {} 条历史消息", history.size());
 
-            reply = aiReplyService.generateReply(content, history);
+            reply = autoReplyClient.generateReply(content, history);
         } catch (Exception e) {
             repliedMsgIds.remove(msgId);
             log.warn("[自动回复] 生成 reply 失败 (dedupe 已撤回, 不返回 autoReply): {}",
@@ -153,8 +154,8 @@ public class AutoReplyService {
     }
 
     /** 拉历史对话作为上下文, 按 owner/peer 维度, 最近 N 条, 老→新. */
-    private List<AiReplyService.HistoryMessage> loadHistory(Long ownerId, Long peerId, Long currentMsgId) {
-        int limit = Math.max(1, props.getAi().getHistoryLimit());
+    private List<AutoReplyClient.HistoryMessage> loadHistory(Long ownerId, Long peerId, Long currentMsgId) {
+        int limit = Math.max(1, props.getAutoReply().getHistoryLimit());
         QueryWrapper<ZaloMessage> qw = new QueryWrapper<>();
         qw.eq("owner_zalo_id", ownerId)
           .eq("peer_user_id",  peerId)
@@ -168,11 +169,11 @@ public class AutoReplyService {
         List<ZaloMessage> rows = messageMapper.selectList(qw);
         Collections.reverse(rows);
 
-        List<AiReplyService.HistoryMessage> out = new ArrayList<>(rows.size());
+        List<AutoReplyClient.HistoryMessage> out = new ArrayList<>(rows.size());
         for (ZaloMessage m : rows) {
             if (m.getContent() == null || m.getContent().isBlank()) continue;
             String role = (m.getIsSend() != null && m.getIsSend() == 1) ? "assistant" : "user";
-            out.add(new AiReplyService.HistoryMessage(role, m.getContent()));
+            out.add(new AutoReplyClient.HistoryMessage(role, m.getContent()));
         }
         return out;
     }
