@@ -45,12 +45,12 @@ zalo-bg:
   collect:
     # 采集接口的共享 token, 客户端推数据时必须带这个 header
     token: ${COLLECT_TOKEN:zalo-collect-token-change-me}
-  ai:
-    # AI 自动回复 (默认 OpenAI gpt-4o-mini, OpenAI 兼容协议; 切 DeepSeek/Qwen/Perplexity 改 base-url + model 即可)
-    base-url: ${AI_BASE_URL:https://api.openai.com/v1}
-    api-key:  ${AI_API_KEY:${OPENAI_API_KEY:${PERPLEXITY_API_KEY:}}}
-    model:    ${AI_MODEL:gpt-4o-mini}
-    timeout-ms: ${AI_TIMEOUT_MS:30000}
+  auto-reply:
+    # AI 自动回复微服务地址. zalo-bg 不再直接调 OpenAI, 而是转调独立部署的 auto-reply.
+    # 同机 systemd 部署默认走 localhost 的 8802 端口.
+    base-url: ${AUTO_REPLY_BASE_URL:http://127.0.0.1:8802}
+    timeout-ms: ${AUTO_REPLY_TIMEOUT_MS:30000}
+    history-limit: ${AUTO_REPLY_HISTORY_LIMIT:12}
 
 springdoc:
   api-docs:
