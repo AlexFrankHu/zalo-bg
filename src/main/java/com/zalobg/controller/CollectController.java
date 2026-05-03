@@ -7,6 +7,7 @@ import com.zalobg.service.CollectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+@Slf4j
 @Tag(name = "采集接口 (Collect)", description = "客户端推送 Zalo WebSocket 原始数据入库; 需带 Header X-Collect-Token")
 @RestController
 @RequestMapping("/api/collect")
@@ -54,8 +56,15 @@ public class CollectController {
 
         if (payload != null && payload.path("autoReply").asBoolean(false)) {
             String accountNickname = extractAccountNickname(payload);
-            autoReplyService.tryAutoReply(payload, accountNickname)
-                    .ifPresent(ar -> ret.put("autoReply", ar));
+            // tryAutoReply 内部已经把所有异常吞成 Optional.empty, 这里再加一层兜底保护:
+            // 任何意外抛出都不应影响 collectMessages 已经完成的入库结果, 客户端仍然能拿到
+            // {upserted: N}, 只是 autoReply 字段不出现, 下一轮 15s 轮询会重试.
+            try {
+                autoReplyService.tryAutoReply(payload, accountNickname)
+                        .ifPresent(ar -> ret.put("autoReply", ar));
+            } catch (Exception e) {
+                log.warn("[自动回复] tryAutoReply 意外异常, 仅返回 upserted: {}", e.getMessage(), e);
+            }
         }
         return R.ok(ret);
     }
