@@ -44,19 +44,29 @@ public class AutoReplyClient {
 
     /** 带历史上下文的多轮回复. history 老→新, 不含本轮 userMessage. */
     public String generateReply(String userMessage, List<HistoryMessage> history) {
-        return generateReply(userMessage, history, null, null, null);
+        return generateReply(userMessage, history, null, null, null, null, null);
+    }
+
+    /** 兼容老调用 (3 个审计字段, 没有 myGed/state). 内部转调全参版本传 null. */
+    public String generateReply(String userMessage, List<HistoryMessage> history,
+                                String friendNickname, Integer friendGed, String myNickname) {
+        return generateReply(userMessage, history, friendNickname, friendGed, myNickname, null, null);
     }
 
     /**
-     * 带完整上下文的回复. 除历史消息外把好友昵称/性别/我方昵称一并透传给 auto-reply
-     * 做审计日志. 这些字段当前不参与 AI prompt, 只在下游打 log, 将来个性化时再启用.
+     * 带完整上下文的回复. 除历史消息外把好友昵称/性别/我方昵称/我方性别/触发场景 state
+     * 一并透传给 auto-reply 做审计日志. 这些字段当前不参与 AI prompt, 只在下游打 log,
+     * 将来个性化时再启用.
      *
      * @param friendNickname 好友昵称 (来自 zalo payload.list[0].nickname)
      * @param friendGed      好友性别 (zalo_friend.gender, 0/1/2)
      * @param myNickname     我方账号昵称 (前端 autoCollectAll 透传的 accountNickname)
+     * @param myGed          我方性别 (zalo_account.sex)
+     * @param state          触发场景 (0=被动回复, 1=新好友15分钟未发, 2-5=主动N次未回, 6-8=久未跟进)
      */
     public String generateReply(String userMessage, List<HistoryMessage> history,
-                                String friendNickname, Integer friendGed, String myNickname) {
+                                String friendNickname, Integer friendGed, String myNickname,
+                                Integer myGed, Integer state) {
         if (userMessage == null || userMessage.isBlank()) {
             throw new ApiException(400, "userMessage 不能为空");
         }
@@ -77,6 +87,8 @@ public class AutoReplyClient {
         if (friendNickname != null) body.put("friendNickname", friendNickname);
         if (friendGed != null)      body.put("friendGed",      friendGed);
         if (myNickname != null)     body.put("myNickname",     myNickname);
+        if (myGed != null)          body.put("myGed",          myGed);
+        if (state != null)          body.put("state",          state);
 
         String reqBody;
         try {

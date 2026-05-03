@@ -3,8 +3,10 @@ package com.zalobg.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.zalobg.config.AppProps;
+import com.zalobg.entity.ZaloAccount;
 import com.zalobg.entity.ZaloFriend;
 import com.zalobg.entity.ZaloMessage;
+import com.zalobg.mapper.ZaloAccountMapper;
 import com.zalobg.mapper.ZaloFriendMapper;
 import com.zalobg.mapper.ZaloMessageMapper;
 import lombok.RequiredArgsConstructor;
@@ -33,12 +35,16 @@ public class AutoReplyService {
     /** ged 兜底值 — 当 zalo_friend 没记录或 gender 字段为空时使用 (业务约定). */
     private static final int DEFAULT_GED = 2;
 
+    /** state=0 表示 "被动回复好友消息" — /api/collect/messages 这条路径固定走这个场景. */
+    private static final int STATE_PASSIVE_REPLY = 0;
+
     /** msgId 级别的去重 TTL. 30 分钟内同一条消息只回复一次 (对抗 15s 轮询重复触发). */
     private static final long DEDUPE_TTL_MS = 30L * 60L * 1000L;
 
     private final AutoReplyClient autoReplyClient;
     private final ZaloMessageMapper messageMapper;
     private final ZaloFriendMapper friendMapper;
+    private final ZaloAccountMapper accountMapper;
     private final AppProps props;
 
     /** msgId -> 回复时间 (epoch ms). 每次调用时顺手清理过期条目, 不依赖定时任务. */
@@ -97,17 +103,21 @@ public class AutoReplyService {
         // 本方法由 CollectController 在 collectMessages 入库成功后再调用, 绝不能让这里的失败
         // 把已经落库的采集结果变成 500.
         Integer ged;
+        Integer myGed;
         List<AutoReplyClient.HistoryMessage> history;
         String reply;
+        int state = STATE_PASSIVE_REPLY;
         try {
-            ged = lookupFriendGed(accountId, fid);
-            log.info("[自动回复] 触发: accountId={}, accountNickname={}, fid={}, nickname={}, ged={}, msgId={}, content={}",
-                    accountId, accountNickname, fid, nickname, ged, msgId, content);
+            ged   = lookupFriendGed(accountId, fid);
+            myGed = lookupAccountSex(accountId);
+            log.info("[自动回复] 触发: accountId={}, accountNickname={}, myGed={}, fid={}, nickname={}, ged={}, msgId={}, state={}, content={}",
+                    accountId, accountNickname, myGed, fid, nickname, ged, msgId, state, content);
 
             history = loadHistory(accountId, fid, msgId);
             log.info("[自动回复] 上下文: 取到 {} 条历史消息", history.size());
 
-            reply = autoReplyClient.generateReply(content, history, nickname, ged, accountNickname);
+            reply = autoReplyClient.generateReply(content, history,
+                    nickname, ged, accountNickname, myGed, state);
         } catch (Exception e) {
             repliedMsgIds.remove(msgId);
             log.warn("[自动回复] 生成 reply 失败 (dedupe 已撤回, 不返回 autoReply): {}",
@@ -176,6 +186,20 @@ public class AutoReplyService {
             out.add(new AutoReplyClient.HistoryMessage(role, m.getContent()));
         }
         return out;
+    }
+
+    /**
+     * 查 zalo_account.sex 作为我方性别 (myGed). 查不到或为空返回 null,
+     * 由下游 auto-reply 自行处理 (审计日志会打 "myGed=null").
+     */
+    private Integer lookupAccountSex(Long accountId) {
+        if (accountId == null) return null;
+        QueryWrapper<ZaloAccount> qw = new QueryWrapper<>();
+        qw.eq("zalo_id", accountId)
+          .ne("deleted", 1)
+          .last("limit 1");
+        ZaloAccount acc = accountMapper.selectOne(qw);
+        return (acc == null) ? null : acc.getSex();
     }
 
     /** 查 zalo_friend.gender 作为 ged 标识, 查不到或为空返回兜底 2. */
