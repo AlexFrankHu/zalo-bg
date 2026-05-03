@@ -73,7 +73,7 @@ public class AutoReplyClient {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("userMessage", userMessage);
         body.put("history", historyJson);
-        // 可选审计字段 — null 也传过去, Jackson 默认序列化成 JSON null, 下游兼容
+        // 可选审计字段 — 仅非 null 时才放入 body, null 字段不传 (下游按缺失处理)
         if (friendNickname != null) body.put("friendNickname", friendNickname);
         if (friendGed != null)      body.put("friendGed",      friendGed);
         if (myNickname != null)     body.put("myNickname",     myNickname);
