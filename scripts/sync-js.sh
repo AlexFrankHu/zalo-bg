@@ -12,7 +12,7 @@
 #                            PAT with contents:read on AlexFrankHu/zalo-website
 #
 # Env overrides:
-#   BRANCH     upstream branch to track (default: devin/1777044500-collect-upload)
+#   BRANCH     upstream branch to track (default: main)
 #
 # Cron entry (ubuntu user):
 #   */2 * * * * /opt/zalo-bg/bin/sync-js.sh >> /var/log/zalo-bg-sync.log 2>&1
@@ -22,7 +22,7 @@ set -euo pipefail
 PAT_FILE=/opt/zalo-bg/bin/.pat
 REPO_URL=https://github.com/AlexFrankHu/zalo-website.git
 REPO_DIR=/opt/zalo-bg/src/zalo-website
-BRANCH="${BRANCH:-devin/1777044500-collect-upload}"
+BRANCH="${BRANCH:-main}"
 SRC_FILE=zalo.xone.cc/static/js/chunk-f6588e50.efaa59d3.js
 DST_DIR=/opt/zalo-bg/files
 DST_FILE="$DST_DIR/$(basename "$SRC_FILE")"
