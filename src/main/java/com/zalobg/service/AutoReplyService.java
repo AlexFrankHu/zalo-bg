@@ -107,7 +107,7 @@ public class AutoReplyService {
             history = loadHistory(accountId, fid, msgId);
             log.info("[自动回复] 上下文: 取到 {} 条历史消息", history.size());
 
-            reply = autoReplyClient.generateReply(content, history);
+            reply = autoReplyClient.generateReply(content, history, nickname, ged, accountNickname);
         } catch (Exception e) {
             repliedMsgIds.remove(msgId);
             log.warn("[自动回复] 生成 reply 失败 (dedupe 已撤回, 不返回 autoReply): {}",
