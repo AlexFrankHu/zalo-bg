@@ -411,8 +411,13 @@ public class AutoReplyService {
         return friendMapper.selectOne(qw);
     }
 
+    /**
+     * LocalDateTime → epoch ms. null 时返回 Long.MAX_VALUE 而不是 0L —
+     * 0L (1970) 会让 (now - ts) ≈ 56 年, 过任何时间阈值, 错误触发 state 2-8;
+     * MAX_VALUE 让 (now - ts) 变成大负数, 永远过不了阈值, 等于"该消息时间未知, 不触发".
+     */
     private static long toEpochMs(LocalDateTime t) {
-        if (t == null) return 0L;
+        if (t == null) return Long.MAX_VALUE;
         return t.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
 

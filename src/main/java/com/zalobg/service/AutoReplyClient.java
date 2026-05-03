@@ -67,9 +67,11 @@ public class AutoReplyClient {
     public String generateReply(String userMessage, List<HistoryMessage> history,
                                 String friendNickname, Integer friendGed, String myNickname,
                                 Integer myGed, Integer state) {
-        if (userMessage == null || userMessage.isBlank()) {
-            throw new ApiException(400, "userMessage 不能为空");
-        }
+        // userMessage 允许为空 (state>=1 主动跟进场景下没有"本轮用户消息"). 上游
+        // AutoReplyService 已经按 state 自己分流, 这里不再二次校验; 下游 auto-reply
+        // 微服务里 AiReplyService 看到空 userMessage 会跳过本轮 user 消息, 让模型
+        // 基于 system prompt + history 自己造话. null 统一规整成空串再透传.
+        String safeUserMessage = (userMessage == null) ? "" : userMessage;
 
         List<Map<String, Object>> historyJson = new ArrayList<>();
         if (history != null) {
@@ -81,7 +83,7 @@ public class AutoReplyClient {
         }
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("userMessage", userMessage);
+        body.put("userMessage", safeUserMessage);
         body.put("history", historyJson);
         // 可选审计字段 — 仅非 null 时才放入 body, null 字段不传 (下游按缺失处理)
         if (friendNickname != null) body.put("friendNickname", friendNickname);
