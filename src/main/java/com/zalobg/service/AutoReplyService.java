@@ -30,14 +30,24 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * 触发策略 (按 state 划分, 每次 collect 都重判):
  *   state=0: 最新一条 = 好友主动发的非系统文本; 走原 msgId 级别去重 (30 分钟).
- *   state=1: 新好友, 没人聊过, 从 zalo_friend.gmt_create 起算 ≥15 分钟.
- *   state=2: 我主动发 1 条, 好友 0 条, 距末次我发 ≥1h.
- *   state=3: 我主动发 2 条, 好友 0 条, 距末次我发 ≥3h.
- *   state=4: 我主动发 3 条, 好友 0 条, 距末次我发 ≥24h.
- *   state=5: 我主动发 4 条, 好友 0 条, 距末次我发 ≥72h.
- *   state=6: 好友总数 1-3, 末位是我发的, 距末次我发 1-24h.
- *   state=7: 好友总数 >3,  末位是我发的, 距末次我发 1-24h.
- *   state=8: 好友总数 >3,  末位是我发的, 距末次我发 >24h.
+ *
+ *   分支 A (双方都没发过 msg_type=1 的文本):
+ *     如果存在 msg_type=5 (添加好友系统消息):
+ *       距系统消息 >15 分钟 → state=1; 否则不发
+ *     如果不存在 msg_type=5: → state=1 (无时间限制)
+ *
+ *   分支 B (好友从未回过, 只有自己发过):
+ *     state=2: 我发 1 条, 距末次我发 ≥1h
+ *     state=3: 我发 2 条, 距末次我发 ≥3h
+ *     state=4: 我发 3 条, 距末次我发 ≥24h
+ *     (我发 ≥4 条不再有 state, 不再骚扰)
+ *
+ *   分支 C (好友回过, 末位是我):
+ *     state=5: 末尾连续 1 条我发, 距末次我发 ∈ [3h, 12h]
+ *     state=6: 末尾连续 2 条我发, 距末次我发 ∈ [12h, 24h]
+ *     state=7: 末尾连续 3 条我发, 距末次我发 ∈ [24h, 48h]
+ *     state=8: 末尾连续 ≥4 条我发, 距末次我发 ∈ [48h, 72h]
+ *     (其它区间一律不触发)
  *
  * state 1-8 用 (accountId, fid, state) 复合键 + 1h TTL 做去重, 防止 15s 轮询狂触发.
  *
@@ -233,10 +243,10 @@ public class AutoReplyService {
 
     /**
      * 按业务规则评估 (accountId, fid) 当前是否落在 state 1-8 中的某一档.
-     * 不命中返回 Optional.empty(). 命中多档时按 state 1→8 顺序优先取小的 (实际规则
-     * 互斥, 但保险起见用 if-else 短路).
+     * 不命中返回 Optional.empty(). 详细规则见类上 javadoc.
      */
     private Optional<Integer> evaluateProactiveState(Long ownerId, Long peerId) {
+        // 拉所有 msg_type=1 (文本) 消息, 老→新.
         QueryWrapper<ZaloMessage> qw = new QueryWrapper<>();
         qw.eq("owner_zalo_id", ownerId)
           .eq("peer_user_id",  peerId)
@@ -248,15 +258,14 @@ public class AutoReplyService {
         int friendCount = 0;
         int myCount = 0;
         Long lastMyMsgEpoch = null;
-        Long earliestEpoch = null;
         for (ZaloMessage m : rows) {
-            long ts = toEpochMs(m.getGmtCreate());
-            if (earliestEpoch == null) earliestEpoch = ts;
             Integer s = m.getIsSend();
-            if (s != null && s == 1) {
+            if (s == null) continue;
+            if (s == 1) {
                 myCount++;
-                lastMyMsgEpoch = ts;
-            } else if (s != null && s == 0) {
+                long ts = toEpochMs(m.getGmtCreate());
+                if (lastMyMsgEpoch == null || ts > lastMyMsgEpoch) lastMyMsgEpoch = ts;
+            } else if (s == 0) {
                 friendCount++;
             }
         }
@@ -270,42 +279,67 @@ public class AutoReplyService {
 
         long now = System.currentTimeMillis();
 
-        // state=1: 双方都没发过, 从"建立时间"起算 ≥15 分钟.
-        // 建立时间优先用 zalo_message 最早一条 (按用户 Q3 选择), 没有则回落 zalo_friend.gmt_create.
-        if (friendCount == 0 && myCount == 0) {
-            Long established = earliestEpoch;
-            if (established == null) established = lookupFriendCreateEpoch(ownerId, peerId);
-            if (established != null && now - established >= 15L * MIN_MS) {
+        // 分支 A: 双方都没发过文本 → 看 msg_type=5 (添加好友系统消息).
+        if (rows.isEmpty()) {
+            Long sysEpoch = lookupAddFriendSystemMsgEpoch(ownerId, peerId);
+            if (sysEpoch == null) {
+                // 没有添加好友系统消息 → 直接 state=1 (无时间限制).
                 return Optional.of(1);
             }
+            // 有系统消息 → 仅当距今 >15 分钟才发, 否则等下一轮.
+            if (now - sysEpoch > 15L * MIN_MS) return Optional.of(1);
             return Optional.empty();
         }
 
-        // state 2-5: 好友 0 条, 我 N 条, 距末次我发 ≥ 阈值.
+        // 分支 B: 好友从未回过文本, 只有我方发过.
         if (friendCount == 0 && lastMyMsgEpoch != null) {
             long elapsed = now - lastMyMsgEpoch;
             if (myCount == 1 && elapsed >= 1L  * HOUR_MS) return Optional.of(2);
             if (myCount == 2 && elapsed >= 3L  * HOUR_MS) return Optional.of(3);
             if (myCount == 3 && elapsed >= 24L * HOUR_MS) return Optional.of(4);
-            if (myCount == 4 && elapsed >= 72L * HOUR_MS) return Optional.of(5);
+            // myCount ≥ 4: 不再发, 防止骚扰.
             return Optional.empty();
         }
 
-        // state 6/7/8: 好友 ≥1 条, 末位是我发的 (trailingMyCount ≥ 1).
-        // 末位若是好友的, 走的是 state=0 路径 (上层已分流), 这里只有非 state=0 的进得来.
+        // 分支 C: 好友回过文本 (friendCount ≥ 1), 末位是我发的 (trailingMyCount ≥ 1).
+        // 末位若是好友的非系统文本, 已被上层 state=0 拦走, 不会进到这里.
         if (friendCount >= 1 && trailingMyCount >= 1 && lastMyMsgEpoch != null) {
             long elapsed = now - lastMyMsgEpoch;
-            if (friendCount <= 3) {
-                if (elapsed >= 1L * HOUR_MS && elapsed <= 24L * HOUR_MS) return Optional.of(6);
-                return Optional.empty();
-            } else {
-                if (elapsed >= 1L * HOUR_MS && elapsed <= 24L * HOUR_MS) return Optional.of(7);
-                if (elapsed > 24L * HOUR_MS) return Optional.of(8);
+            if (trailingMyCount >= 4) {
+                if (elapsed >= 48L * HOUR_MS && elapsed <= 72L * HOUR_MS) return Optional.of(8);
                 return Optional.empty();
             }
+            if (trailingMyCount == 3) {
+                if (elapsed >= 24L * HOUR_MS && elapsed <= 48L * HOUR_MS) return Optional.of(7);
+                return Optional.empty();
+            }
+            if (trailingMyCount == 2) {
+                if (elapsed >= 12L * HOUR_MS && elapsed <= 24L * HOUR_MS) return Optional.of(6);
+                return Optional.empty();
+            }
+            // trailingMyCount == 1
+            if (elapsed >= 3L * HOUR_MS && elapsed <= 12L * HOUR_MS) return Optional.of(5);
+            return Optional.empty();
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * 找 (owner, peer) 的最新一条 msg_type=5 (添加好友系统消息) 的 gmt_create.
+     * 没有则返回 null. 用于分支 A 的 state=1 判定.
+     */
+    private Long lookupAddFriendSystemMsgEpoch(Long ownerId, Long peerId) {
+        QueryWrapper<ZaloMessage> qw = new QueryWrapper<>();
+        qw.eq("owner_zalo_id", ownerId)
+          .eq("peer_user_id",  peerId)
+          .eq("msg_type",      5)
+          .ne("deleted",       1)
+          .orderByDesc("gmt_create")
+          .last("limit 1");
+        ZaloMessage m = messageMapper.selectOne(qw);
+        if (m == null || m.getGmtCreate() == null) return null;
+        return toEpochMs(m.getGmtCreate());
     }
 
     // ---------------------------------------------------------------------
@@ -393,13 +427,6 @@ public class AutoReplyService {
         ZaloFriend f = lookupFriend(ownerId, friendUserId);
         if (f == null) return null;
         return f.getDisplayName();
-    }
-
-    /** 查 zalo_friend.gmt_create (好友入库时间) 作为 state=1 建立时间的回落值. */
-    private Long lookupFriendCreateEpoch(Long ownerId, Long friendUserId) {
-        ZaloFriend f = lookupFriend(ownerId, friendUserId);
-        if (f == null || f.getGmtCreate() == null) return null;
-        return toEpochMs(f.getGmtCreate());
     }
 
     private ZaloFriend lookupFriend(Long ownerId, Long friendUserId) {
