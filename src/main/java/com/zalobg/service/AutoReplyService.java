@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -402,10 +403,14 @@ public class AutoReplyService {
         for (ZaloMessage m : rows) {
             if (m.getContent() == null || m.getContent().isBlank()) continue;
             String role = (m.getIsSend() != null && m.getIsSend() == 1) ? "assistant" : "user";
-            out.add(new AutoReplyClient.HistoryMessage(role, m.getContent()));
+            String time = (m.getGmtCreate() == null) ? null : m.getGmtCreate().format(HISTORY_TIME_FMT);
+            out.add(new AutoReplyClient.HistoryMessage(role, m.getContent(), time));
         }
         return out;
     }
+
+    /** 历史消息 time 字段对外格式, 不带时区 (服务器本地时). */
+    private static final DateTimeFormatter HISTORY_TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
      * 查 zalo_account.sex 作为我方性别 (myGed). 查不到或为空返回 null,

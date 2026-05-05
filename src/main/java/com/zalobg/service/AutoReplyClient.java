@@ -39,8 +39,13 @@ public class AutoReplyClient {
                 .build();
     }
 
-    /** 一轮历史消息. role: "user" (对方发来) / "assistant" (我方回复). */
-    public record HistoryMessage(String role, String content) {}
+    /**
+     * 一轮历史消息. role: "user" (对方发来) / "assistant" (我方回复).
+     * time: 消息时间 "yyyy-MM-dd HH:mm:ss" (来源 zalo_message.gmt_create);
+     * 历史数据缺失 gmt_create 时 null. 下游 auto-reply 仅用于审计日志,
+     * 不参与 prompt.
+     */
+    public record HistoryMessage(String role, String content, String time) {}
 
     /** 带历史上下文的多轮回复. history 老→新, 不含本轮 userMessage. */
     public String generateReply(String userMessage, List<HistoryMessage> history) {
@@ -78,7 +83,11 @@ public class AutoReplyClient {
             for (HistoryMessage h : history) {
                 if (h == null || h.content() == null || h.content().isBlank()) continue;
                 String role = ("assistant".equals(h.role())) ? "assistant" : "user";
-                historyJson.add(Map.of("role", role, "content", h.content()));
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("role", role);
+                item.put("content", h.content());
+                if (h.time() != null) item.put("time", h.time());
+                historyJson.add(item);
             }
         }
 
