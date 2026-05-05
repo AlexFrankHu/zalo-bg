@@ -42,6 +42,6 @@ public class AppProps {
         /** HTTP 连接 / 读超时 (ms). 透传给 HttpClient. */
         private int timeoutMs = 30_000;
         /** 从 zalo_message 拉历史聊天作为上下文时的最近 N 条数. */
-        private int historyLimit = 12;
+        private int historyLimit = 30;
     }
 }
