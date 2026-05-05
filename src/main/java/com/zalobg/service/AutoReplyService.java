@@ -263,8 +263,14 @@ public class AutoReplyService {
             if (s == null) continue;
             if (s == 1) {
                 myCount++;
-                long ts = toEpochMs(m.getGmtCreate());
-                if (lastMyMsgEpoch == null || ts > lastMyMsgEpoch) lastMyMsgEpoch = ts;
+                // 跳过 gmt_create 为 null 的行 — toEpochMs(null) 返 Long.MAX_VALUE,
+                // max-tracking 下它会作为"毒值"永久占位, 让任何后续合法时间戳都
+                // 无法超过, 导致 elapsed=now-MAX_VALUE 变大负数, state 2-8 全部
+                // 静默失效. 跳过即可 (myCount 仍然计入, 只是不参与 lastMyMsgEpoch).
+                if (m.getGmtCreate() != null) {
+                    long ts = toEpochMs(m.getGmtCreate());
+                    if (lastMyMsgEpoch == null || ts > lastMyMsgEpoch) lastMyMsgEpoch = ts;
+                }
             } else if (s == 0) {
                 friendCount++;
             }
