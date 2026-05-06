@@ -161,7 +161,7 @@
                             <template #default="{row}">{{ fstatusLabel(row.fstatus) }}</template>
                         </el-table-column>
                         <el-table-column prop="remark" label="备注" min-width="120"></el-table-column>
-                        <el-table-column prop="msgSum" label="未读" width="70"></el-table-column>
+                        <el-table-column prop="messageTotal" label="消息总数" width="100"></el-table-column>
                         <el-table-column label="最后消息" width="160">
                             <template #default="{row}">{{ fmtDate(row.latestMsgTime) }}</template>
                         </el-table-column>

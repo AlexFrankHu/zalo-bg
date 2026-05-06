@@ -27,7 +27,11 @@ import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Tag(name = "管理后台查询 (Query)", description = "只读查询接口, 均需 JWT")
 @RestController
@@ -94,7 +98,44 @@ public class AdminQueryController {
         if (deptId != null) w.eq(ZaloFriend::getDeptId, deptId);
         w.orderByDesc(ZaloFriend::getLatestMsgTime);
         IPage<ZaloFriend> p = friendMapper.selectPage(Page.of(page, size), w);
+        fillMessageTotals(p.getRecords());
         return R.ok(p);
+    }
+
+    /**
+     * 给好友列表的当前页填充 messageTotal (= zalo_message 中 (owner, peer) 的消息总数).
+     * 按 ownerZaloId 分组聚合, 每组一条 IN 查询. 所有未命中聚合 (即 zalo_message 没有任何记录)
+     * 的好友 messageTotal 置 0, 而非 null, 让前端表格直接显示 "0".
+     */
+    private void fillMessageTotals(List<ZaloFriend> rows) {
+        if (rows == null || rows.isEmpty()) return;
+        Map<Long, List<ZaloFriend>> byOwner = rows.stream()
+                .filter(f -> f.getOwnerZaloId() != null && f.getFriendUserId() != null)
+                .collect(Collectors.groupingBy(ZaloFriend::getOwnerZaloId));
+        for (Map.Entry<Long, List<ZaloFriend>> e : byOwner.entrySet()) {
+            Long ownerZaloId = e.getKey();
+            List<Long> peers = e.getValue().stream()
+                    .map(ZaloFriend::getFriendUserId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.toList());
+            if (peers.isEmpty()) continue;
+            List<Map<String, Object>> totals =
+                    messageMapper.selectMessageTotalsByOwnerAndPeers(ownerZaloId, peers);
+            Map<Long, Long> peerToCount = new HashMap<>();
+            for (Map<String, Object> row : totals) {
+                Object peer = row.get("peer_user_id");
+                Object cnt = row.get("cnt");
+                if (peer == null || cnt == null) continue;
+                peerToCount.put(((Number) peer).longValue(), ((Number) cnt).longValue());
+            }
+            for (ZaloFriend f : e.getValue()) {
+                f.setMessageTotal(peerToCount.getOrDefault(f.getFriendUserId(), 0L));
+            }
+        }
+        for (ZaloFriend f : rows) {
+            if (f.getMessageTotal() == null) f.setMessageTotal(0L);
+        }
     }
 
     // ---------- 会话聊天记录 (查看 / 导出) ----------

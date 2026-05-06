@@ -1,6 +1,7 @@
 package com.zalobg.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -36,4 +37,8 @@ public class ZaloFriend {
     private String rawJson;
     @TableLogic
     private Integer deleted;
+
+    /** 与该好友的聊天消息总数 (来自 zalo_message 聚合, 非 DB 字段). */
+    @TableField(exist = false)
+    private Long messageTotal;
 }
