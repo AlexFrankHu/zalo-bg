@@ -66,6 +66,15 @@ public class AutoReplyService {
     /** state=0 表示 "被动回复好友消息" — 最新一条 = 好友主动发的非系统文本. */
     private static final int STATE_PASSIVE_REPLY = 0;
 
+    /**
+     * 测试用魔法字串: 好友发这个内容时, 跳过 AI 调用, 直接给前端返回 image 指令,
+     * 让客户端用 sendImageMsg 发一张测试图片. 用于端到端验证图片发送链路.
+     */
+    private static final String MAGIC_IMAGE_TRIGGER = "9527952795279527";
+
+    /** 跟 MAGIC_IMAGE_TRIGGER 配套的测试图片 URL. */
+    private static final String MAGIC_IMAGE_URL = "https://zalo.qxh77.com/files/testimg.png";
+
     /** msgId 级别的去重 TTL (state=0). 30 分钟内同一条消息只回复一次. */
     private static final long PASSIVE_DEDUPE_TTL_MS = 30L * 60L * 1000L;
 
@@ -140,6 +149,25 @@ public class AutoReplyService {
         if (repliedMsgIds.putIfAbsent(msgId, System.currentTimeMillis()) != null) {
             log.info("[自动回复] 跳过: msgId={} 已在 30 分钟内被回复过 (dedupe)", msgId);
             return Optional.empty();
+        }
+
+        // 魔法字串短路: 跳过 AI 调用, 直接给前端返回 image 指令让客户端 sendImageMsg
+        // 发测试图片. 用来端到端验证图片发送链路. dedupe 仍然生效, 30 分钟内同 msgId
+        // 不重复下发, 避免测试时客户端轮询反复推图刷屏.
+        if (MAGIC_IMAGE_TRIGGER.equals(content)) {
+            log.info("[自动回复] 魔法字串命中: accountId={}, fid={}, msgId={}, content={} — 下发 image 指令 {}",
+                    accountId, fid, msgId, content, MAGIC_IMAGE_URL);
+            Map<String, Object> imgRet = new LinkedHashMap<>();
+            imgRet.put("replyType", "image");
+            imgRet.put("imageUrl", MAGIC_IMAGE_URL);
+            imgRet.put("accountid", accountId);
+            if (accountNickname != null) imgRet.put("accountNickname", accountNickname);
+            imgRet.put("fid", fid);
+            imgRet.put("msgid", msgId);
+            if (nickname != null) imgRet.put("nickname", nickname);
+            imgRet.put("state", STATE_PASSIVE_REPLY);
+            imgRet.put("historyCount", 0);
+            return Optional.of(imgRet);
         }
 
         // 从进 dedupe 那一刻起, 任意下游失败 (DB / AI) 都要回滚 dedupe 条目, 否则这条
