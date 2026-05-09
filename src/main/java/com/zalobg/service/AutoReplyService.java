@@ -47,7 +47,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *     state=5: 末尾连续 1 条我发, 距末次我发 ∈ [3h, 12h]
  *     state=6: 末尾连续 2 条我发, 距末次我发 ∈ [12h, 24h]
  *     state=7: 末尾连续 3 条我发, 距末次我发 ∈ [24h, 48h]
- *     state=8: 末尾连续 ≥4 条我发, 距末次我发 ∈ [48h, 72h]
+ *     state=8: 末尾连续 4 条我发, 距末次我发 ∈ [48h, 72h]
+ *     末尾连续 ≥5 条我发 → 直接刹车, 不再骚扰
  *     (其它区间一律不触发)
  *
  * state 1-8 用 (accountId, fid, state) 复合键 + 1h TTL 做去重, 防止 15s 轮询狂触发.
@@ -339,8 +340,14 @@ public class AutoReplyService {
         // 分支 C: 好友回过文本 (friendCount ≥ 1), 末位是我发的 (trailingMyCount ≥ 1).
         // 末位若是好友的非系统文本, 已被上层 state=0 拦走, 不会进到这里.
         if (friendCount >= 1 && trailingMyCount >= 1 && lastMyMsgEpoch != null) {
+            // 末尾连续 ≥5 条都是我发的 → 直接踩刹车, state=-1, 不再骚扰.
+            if (trailingMyCount >= 5) {
+                log.debug("[自动回复-主动] 末尾连续 {} 条都是我发的, 触发刹车 state=-1: accountId={}, fid={}",
+                        trailingMyCount, ownerId, peerId);
+                return Optional.empty();
+            }
             long elapsed = now - lastMyMsgEpoch;
-            if (trailingMyCount >= 4) {
+            if (trailingMyCount == 4) {
                 if (elapsed >= 48L * HOUR_MS && elapsed <= 72L * HOUR_MS) return Optional.of(8);
                 return Optional.empty();
             }
