@@ -6,7 +6,7 @@
 - **应用端口**: `8801` (Spring Boot 内嵌 Tomcat 同时服务 API 与静态页)
 - **数据库**: 本机 MySQL 8, 库 `zalo_bg`, 账号 `zalo / ZaloBg@2026`
 - **systemd 服务**: `zalo-bg.service`
-- **日志**: `/opt/zalo-bg/logs/app.log`
+- **日志**: `/opt/zalo-bg/logs/app.log` (logrotate 切分, size 100M / 留 7 份 / gzip; 见下)
 - **jar 位置**: `/opt/zalo-bg/zalo-bg.jar` (瘦 jar, 约 335 KB, 不内嵌依赖)
 - **依赖 jar 目录**: `/opt/zalo-bg/libs/` (74 个外部依赖 jar, 约 41 MB)
 - **对外域名**: `zalo.qxh77.com` (nginx :80 反代 → 127.0.0.1:8801, HTTPS 由 Cloudflare 终结)
@@ -67,6 +67,28 @@ tail -f /opt/zalo-bg/logs/app.log
 # 直连数据库
 mysql -uzalo -pZaloBg@2026 zalo_bg
 ```
+
+## 应用日志切分 (logrotate)
+
+zalo-bg 通过 `systemd StandardOutput=append:/opt/zalo-bg/logs/app.log` 把 stdout/stderr
+直接落到该文件 (没用 logback file appender), 因此**不会自动按大小/时间切分**。
+不接 logrotate 时, 这个文件会一直追加, 直到撑满磁盘。
+
+仓库里 [`etc/logrotate.d/zalo-bg`](../etc/logrotate.d/zalo-bg) 提供了一份配置:
+- `size 100M` — 超过 100M 才切
+- `rotate 7` — 留最近 7 份
+- `compress` + `delaycompress` — 上一份 gzip
+- `copytruncate` — 不换 inode, 兼容 systemd 持有的 fd
+
+**安装**(一次性, 已在 `43.128.109.91` 完成):
+```bash
+sudo cp etc/logrotate.d/zalo-bg /etc/logrotate.d/zalo-bg
+sudo chmod 0644 /etc/logrotate.d/zalo-bg
+sudo logrotate -d /etc/logrotate.d/zalo-bg   # 校验, dry-run
+sudo logrotate -f /etc/logrotate.d/zalo-bg   # 强制走一遍
+```
+
+logrotate 由系统 `logrotate.timer` 每天凌晨自动跑。
 
 ## 配置(环境变量)
 
