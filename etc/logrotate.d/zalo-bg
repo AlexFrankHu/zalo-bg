@@ -1,0 +1,27 @@
+# logrotate 配置: 控制 /opt/zalo-bg/logs/app.log 不再无限增长.
+#
+# zalo-bg 通过 systemd `StandardOutput=append:/opt/zalo-bg/logs/app.log` 把
+# 应用 stdout/stderr 直接落到该文件 (没用 logback file appender), 因此不会
+# 自动按大小/时间切分. 不接 logrotate 时, 这个文件会一直追加到磁盘满.
+#
+# 安装方式 (在生产机上, 一次性):
+#   sudo cp etc/logrotate.d/zalo-bg /etc/logrotate.d/zalo-bg
+#   sudo chmod 0644 /etc/logrotate.d/zalo-bg
+#   sudo logrotate -d /etc/logrotate.d/zalo-bg   # 校验
+#
+# logrotate.timer 每天跑一次, 命中条件就切. 也可手动测试:
+#   sudo logrotate -f /etc/logrotate.d/zalo-bg
+#
+# 由于 systemd 的 append: 是单次 open() + O_APPEND 写, 这里必须用 copytruncate
+# (不能用 create), 否则新 inode 跟 systemd 持有的旧 fd 不是同一个文件,
+# 旋转后日志会消失.
+/opt/zalo-bg/logs/app.log {
+    size 100M
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su root root
+}
