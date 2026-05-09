@@ -42,10 +42,11 @@ public class AutoReplyClient {
     /**
      * 一轮历史消息. role: "user" (对方发来) / "assistant" (我方回复).
      * time: 消息时间 "yyyy-MM-dd HH:mm:ss" (来源 zalo_message.gmt_create);
-     * 历史数据缺失 gmt_create 时 null. 下游 auto-reply 仅用于审计日志,
-     * 不参与 prompt.
+     * 历史数据缺失 gmt_create 时 null. 下游 auto-reply 仅用于审计日志, 不参与 prompt.
+     * msgType: zalo_message.msg_type (1=文本/2=图片/3=语音/4=视频/5=系统提示/7=贴图/8=卡片).
+     * 上游历史数据缺失时 null. 下游 auto-reply 仅用于审计日志.
      */
-    public record HistoryMessage(String role, String content, String time) {}
+    public record HistoryMessage(String role, String content, String time, Integer msgType) {}
 
     /** 带历史上下文的多轮回复. history 老→新, 不含本轮 userMessage. */
     public String generateReply(String userMessage, List<HistoryMessage> history) {
@@ -81,12 +82,16 @@ public class AutoReplyClient {
         List<Map<String, Object>> historyJson = new ArrayList<>();
         if (history != null) {
             for (HistoryMessage h : history) {
-                if (h == null || h.content() == null || h.content().isBlank()) continue;
+                if (h == null) continue;
+                // 现在透传所有消息类型 (图片/语音/系统消息等), 部分类型 content 可能为空
+                // 字符串. 这里不再因 blank content 丢弃整条历史, 让下游能完整审计.
                 String role = ("assistant".equals(h.role())) ? "assistant" : "user";
+                String content = h.content() == null ? "" : h.content();
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("role", role);
-                item.put("content", h.content());
-                if (h.time() != null) item.put("time", h.time());
+                item.put("content", content);
+                if (h.time() != null)    item.put("time",    h.time());
+                if (h.msgType() != null) item.put("msgType", h.msgType());
                 historyJson.add(item);
             }
         }

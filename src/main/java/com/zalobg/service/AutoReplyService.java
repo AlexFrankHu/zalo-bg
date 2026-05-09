@@ -418,28 +418,41 @@ public class AutoReplyService {
         proactiveTriggered.entrySet().removeIf(e -> now - e.getValue() > PROACTIVE_DEDUPE_TTL_MS);
     }
 
-    /** 拉历史对话作为上下文, 按 owner/peer 维度, 最近 N 条, 老→新. */
+    /**
+     * 拉历史对话作为上下文, 按 owner/peer 维度, 全量(所有消息类型 + 不限条数), 老→新.
+     *
+     * 之前的过滤规则已废弃:
+     *   - 不再 .eq("msg_type", 1)  → 所有类型 (图片/语音/视频/系统消息/贴图/卡片) 都进
+     *   - 不再 .last("limit N")   → historyLimit 配置仅作可选兜底, ≤0 时表示无上限
+     *   - 不再丢弃 blank content   → 部分类型 content 为空 (e.g. 系统消息), 也保留
+     * 这样下游 auto-reply 可以完整看到对话脉络做时间/类型感知决策.
+     *
+     * 仍排除 deleted=1 的消息, 以及当前正在处理的 msgId (避免 state=0 路径里
+     * 把刚收到的那条用户消息当历史一并塞回去, 跟 userMessage 重复).
+     */
     private List<AutoReplyClient.HistoryMessage> loadHistory(Long ownerId, Long peerId, Long currentMsgId) {
-        int limit = Math.max(1, props.getAutoReply().getHistoryLimit());
+        int limit = props.getAutoReply().getHistoryLimit();    // ≤0 = 不限
         QueryWrapper<ZaloMessage> qw = new QueryWrapper<>();
         qw.eq("owner_zalo_id", ownerId)
           .eq("peer_user_id",  peerId)
-          .eq("msg_type",      1)
           .ne("deleted",       1);
         if (currentMsgId != null) {
             qw.ne("msg_id", currentMsgId);
         }
-        qw.orderByDesc("gmt_create").last("limit " + limit);
+        qw.orderByDesc("gmt_create");
+        if (limit > 0) {
+            qw.last("limit " + limit);
+        }
 
         List<ZaloMessage> rows = messageMapper.selectList(qw);
         Collections.reverse(rows);
 
         List<AutoReplyClient.HistoryMessage> out = new ArrayList<>(rows.size());
         for (ZaloMessage m : rows) {
-            if (m.getContent() == null || m.getContent().isBlank()) continue;
             String role = (m.getIsSend() != null && m.getIsSend() == 1) ? "assistant" : "user";
             String time = (m.getGmtCreate() == null) ? null : m.getGmtCreate().format(HISTORY_TIME_FMT);
-            out.add(new AutoReplyClient.HistoryMessage(role, m.getContent(), time));
+            String content = m.getContent() == null ? "" : m.getContent();
+            out.add(new AutoReplyClient.HistoryMessage(role, content, time, m.getMsgType()));
         }
         return out;
     }
