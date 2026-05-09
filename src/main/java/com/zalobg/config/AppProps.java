@@ -41,7 +41,11 @@ public class AppProps {
         private String baseUrl = "http://127.0.0.1:8802";
         /** HTTP 连接 / 读超时 (ms). 透传给 HttpClient. */
         private int timeoutMs = 30_000;
-        /** 从 zalo_message 拉历史聊天作为上下文时的最近 N 条数. */
-        private int historyLimit = 30;
+        /**
+         * 从 zalo_message 拉历史聊天作为上下文时的最大条数兜底.
+         * ≤0 表示不限 (默认): 拉 owner/peer 之间所有消息类型的全部历史.
+         * 真实流量库较大时可以临时设个上限避免 token 爆 / DB 慢.
+         */
+        private int historyLimit = 0;
     }
 }
