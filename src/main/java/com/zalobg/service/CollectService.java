@@ -86,11 +86,14 @@ public class CollectService {
                             .eq(ZaloFriend::getFriendUserId, f.getFriendUserId())
                             .last("LIMIT 1"));
             if (exist == null) {
-                f.setCollectedAt(LocalDateTime.now());
+                LocalDateTime now = LocalDateTime.now();
+                f.setCollectedAt(now);
+                f.setFirstCollectedAt(now);
                 friendMapper.insert(f);
             } else {
                 f.setId(exist.getId());
                 f.setCollectedAt(LocalDateTime.now());
+                // firstCollectedAt 不写, updateById 只更新非 null 字段, 老值保留
                 friendMapper.updateById(f);
             }
             count++;

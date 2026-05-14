@@ -33,7 +33,10 @@ public class ZaloFriend {
     private Integer msgSum;
     private LocalDateTime latestMsgTime;
     private LocalDateTime gmtCreate;
+    /** 本地最近一次采集入库的时间 (每次 upsert 都覆盖). */
     private LocalDateTime collectedAt;
+    /** 本地首次采集入库的时间 (仅 insert 时写, update 时不修改; 历史数据为 NULL). */
+    private LocalDateTime firstCollectedAt;
     private String rawJson;
     @TableLogic
     private Integer deleted;

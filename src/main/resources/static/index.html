@@ -171,7 +171,10 @@
                                 <el-image v-if="row.avatar" :src="row.avatar" style="width:40px;height:40px;border-radius:4px"></el-image>
                             </template>
                         </el-table-column>
-                        <el-table-column label="入库" width="160">
+                        <el-table-column label="首次入库" width="160">
+                            <template #default="{row}">{{ fmtDate(row.firstCollectedAt) }}</template>
+                        </el-table-column>
+                        <el-table-column label="最近入库" width="160">
                             <template #default="{row}">{{ fmtDate(row.collectedAt) }}</template>
                         </el-table-column>
                         <el-table-column label="聊天内容" width="160" fixed="right">
