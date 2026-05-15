@@ -76,6 +76,14 @@ public class AutoReplyService {
     /** 跟 MAGIC_IMAGE_TRIGGER 配套的测试图片 URL. */
     private static final String MAGIC_IMAGE_URL = "https://zalo.qxh77.com/files/testimg.png";
 
+    /**
+     * Zalo 客户端在好友屏蔽陌生人时, 会本地伪造一条 "来自好友" 的系统提示消息塞进
+     * 当前会话, 内容就是这串越南语. 实际不是好友发的, 是 Zalo 在告诉自己 "对方
+     * 把你拉黑了, 你别再发了". 命中后 state=0 不调 AI, 直接跳过.
+     */
+    private static final String BLOCKED_BY_STRANGER_MSG =
+            "Bạn chưa thể gửi tin nhắn đến người này vì người này chặn không nhận tin nhắn từ người lạ.";
+
     /** msgId 级别的去重 TTL (state=0). 30 分钟内同一条消息只回复一次. */
     private static final long PASSIVE_DEDUPE_TTL_MS = 30L * 60L * 1000L;
 
@@ -149,6 +157,16 @@ public class AutoReplyService {
         cleanupPassiveDedupe();
         if (repliedMsgIds.putIfAbsent(msgId, System.currentTimeMillis()) != null) {
             log.info("[自动回复] 跳过: msgId={} 已在 30 分钟内被回复过 (dedupe)", msgId);
+            return Optional.empty();
+        }
+
+        // Zalo 客户端在对方屏蔽陌生人时伪造的本地系统提示, 不是好友真发的.
+        // 命中后直接跳过, 不调 AI, 也不下发任何指令. dedupe 条目保留,
+        // 让同 msgId 在 30 分钟内不重复评估.
+        if (content != null && BLOCKED_BY_STRANGER_MSG.equals(content.trim())) {
+            log.info("[自动回复] 跳过: 命中 blocked-by-stranger 系统提示 (对方屏蔽了陌生人消息) " +
+                            "accountId={}, fid={}, msgId={}",
+                    accountId, fid, msgId);
             return Optional.empty();
         }
 
