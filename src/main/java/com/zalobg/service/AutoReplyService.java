@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -77,12 +78,21 @@ public class AutoReplyService {
     private static final String MAGIC_IMAGE_URL = "https://zalo.qxh77.com/files/testimg.png";
 
     /**
-     * Zalo 客户端在好友屏蔽陌生人时, 会本地伪造一条 "来自好友" 的系统提示消息塞进
-     * 当前会话, 内容就是这串越南语. 实际不是好友发的, 是 Zalo 在告诉自己 "对方
-     * 把你拉黑了, 你别再发了". 命中后 state=0 不调 AI, 直接跳过.
+     * Zalo 客户端在某些场景下会本地伪造一条 "来自好友" 的系统提示消息塞进当前
+     * 会话 (实际并不是好友真的发了消息). 这些提示一字不差地按下面列出的越南语
+     * 文本出现, 命中任一项后 state=0 路径直接跳过, 不调 AI, 不下发任何指令.
+     *
+     * 已知场景:
+     *   1) 对方屏蔽了陌生人 "Bạn chưa thể gửi tin nhắn ..."
+     *   2) 新会话欢迎引导 ":-bye Mau mau gửi lời chào ..."
+     *
+     * 匹配规则: content.trim() 与下列任一字符串 equals (精确匹配, 不用 contains
+     * 防止正文里出现这段话被误伤).
      */
-    private static final String BLOCKED_BY_STRANGER_MSG =
-            "Bạn chưa thể gửi tin nhắn đến người này vì người này chặn không nhận tin nhắn từ người lạ.";
+    private static final Set<String> SKIP_SYSTEM_MESSAGES = Set.of(
+            "Bạn chưa thể gửi tin nhắn đến người này vì người này chặn không nhận tin nhắn từ người lạ.",
+            ":-bye Mau mau gửi lời chào, kết nối bao tâm trạng, khơi mào bao cảm xúc."
+    );
 
     /** msgId 级别的去重 TTL (state=0). 30 分钟内同一条消息只回复一次. */
     private static final long PASSIVE_DEDUPE_TTL_MS = 30L * 60L * 1000L;
@@ -160,13 +170,12 @@ public class AutoReplyService {
             return Optional.empty();
         }
 
-        // Zalo 客户端在对方屏蔽陌生人时伪造的本地系统提示, 不是好友真发的.
-        // 命中后直接跳过, 不调 AI, 也不下发任何指令. dedupe 条目保留,
-        // 让同 msgId 在 30 分钟内不重复评估.
-        if (content != null && BLOCKED_BY_STRANGER_MSG.equals(content.trim())) {
-            log.info("[自动回复] 跳过: 命中 blocked-by-stranger 系统提示 (对方屏蔽了陌生人消息) " +
-                            "accountId={}, fid={}, msgId={}",
-                    accountId, fid, msgId);
+        // Zalo 客户端伪造塞进会话的系统提示, 不是好友真发的. 命中任一已知文本
+        // 后直接跳过, 不调 AI, 也不下发任何指令. dedupe 条目保留, 让同 msgId 在
+        // 30 分钟内不重复评估.
+        if (content != null && SKIP_SYSTEM_MESSAGES.contains(content.trim())) {
+            log.info("[自动回复] 跳过: 命中 Zalo 本地伪造系统提示 accountId={}, fid={}, msgId={}, content={}",
+                    accountId, fid, msgId, content.trim());
             return Optional.empty();
         }
 
