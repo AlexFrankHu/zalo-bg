@@ -56,7 +56,7 @@ const App = {
 
         // ----- 好友 -----
         const friFilter = reactive({ ownerZaloId:'', friendUserId:'', displayName:'', phone:'', fstatus:'', deptId:'' });
-        const friList = ref([]); const friTotal = ref(0); const friPage = ref(1); const friSize = ref(20); const friLoading = ref(false);
+        const friList = ref([]); const friTotal = ref(0); const friPage = ref(1); const friSize = ref(10); const friLoading = ref(false);
         const resetFriFilter = () => { Object.keys(friFilter).forEach(k=>friFilter[k]=''); loadFriends(1); };
         const loadFriends = async (p) => {
             friPage.value = p || friPage.value;
@@ -69,6 +69,8 @@ const App = {
                 friTotal.value = data.data.total || 0;
             } finally { friLoading.value = false; }
         };
+        // 用户从分页器右侧切换每页条数: 重置到第 1 页再拉.
+        const onFriSizeChange = (s) => { friSize.value = s; loadFriends(1); };
 
         // ----- 聊天记录弹窗 -----
         const chatDialogVisible = ref(false);
@@ -209,7 +211,7 @@ const App = {
             token, nickName, loginForm, loginLoading, doLogin, logout,
             activeMenu, menuTitle, switchMenu,
             accFilter, accList, accTotal, accPage, accSize, accLoading, loadAccounts, resetAccFilter,
-            friFilter, friList, friTotal, friPage, friSize, friLoading, loadFriends, resetFriFilter,
+            friFilter, friList, friTotal, friPage, friSize, friLoading, loadFriends, resetFriFilter, onFriSizeChange,
             chatDialogVisible, chatDialogTitle, chatMessages, chatLoading, openChatDialog, exportChat,
             msgFilter, msgDateRange, msgList, msgTotal, msgPage, msgSize, msgLoading, loadMessages, resetMsgFilter,
             fmtDate, sexLabel, fstatusLabel, msgTypeLabel
