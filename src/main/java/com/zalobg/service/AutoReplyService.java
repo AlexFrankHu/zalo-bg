@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 /**
  * 在采集聊天记录 (/api/collect/messages) 的同步流程里, 根据最新一条消息 + 会话历史
@@ -92,6 +93,19 @@ public class AutoReplyService {
     private static final Set<String> SKIP_SYSTEM_MESSAGES = Set.of(
             "Bạn chưa thể gửi tin nhắn đến người này vì người này chặn không nhận tin nhắn từ người lạ.",
             ":-bye Mau mau gửi lời chào, kết nối bao tâm trạng, khơi mào bao cảm xúc."
+    );
+
+    /**
+     * 同样是 Zalo 客户端本地伪造的系统提示, 但带占位符 (会被替换成好友昵称 / 当前
+     * 时间等), 不能用精确字符串匹配. 用 ^...$ 锚定全字符串, 占位符位置要求至少 1
+     * 个非空字符 (`\S+`), 防止正文里出现这段话被误伤.
+     *
+     * 已知场景:
+     *   1) 好友屏蔽了我方消息 "%1$s đã chặn tin nhắn."
+     *      (Zalo 把 %1$s 替换成好友昵称, 实际看到: "Alice đã chặn tin nhắn.")
+     */
+    private static final List<Pattern> SKIP_SYSTEM_MESSAGE_PATTERNS = List.of(
+            Pattern.compile("^\\S+(?: \\S+)* đã chặn tin nhắn\\.$")
     );
 
     /** msgId 级别的去重 TTL (state=0). 30 分钟内同一条消息只回复一次. */
@@ -173,10 +187,13 @@ public class AutoReplyService {
         // Zalo 客户端伪造塞进会话的系统提示, 不是好友真发的. 命中任一已知文本
         // 后直接跳过, 不调 AI, 也不下发任何指令. dedupe 条目保留, 让同 msgId 在
         // 30 分钟内不重复评估.
-        if (content != null && SKIP_SYSTEM_MESSAGES.contains(content.trim())) {
-            log.info("[自动回复] 跳过: 命中 Zalo 本地伪造系统提示 accountId={}, fid={}, msgId={}, content={}",
-                    accountId, fid, msgId, content.trim());
-            return Optional.empty();
+        if (content != null) {
+            String trimmed = content.trim();
+            if (SKIP_SYSTEM_MESSAGES.contains(trimmed) || matchesSkipPattern(trimmed)) {
+                log.info("[自动回复] 跳过: 命中 Zalo 本地伪造系统提示 accountId={}, fid={}, msgId={}, content={}",
+                        accountId, fid, msgId, trimmed);
+                return Optional.empty();
+            }
         }
 
         // 魔法字串短路: 跳过 AI 调用, 直接给前端返回 image 指令让客户端 sendImageMsg
@@ -438,6 +455,17 @@ public class AutoReplyService {
     private void cleanupPassiveDedupe() {
         long now = System.currentTimeMillis();
         repliedMsgIds.entrySet().removeIf(e -> now - e.getValue() > PASSIVE_DEDUPE_TTL_MS);
+    }
+
+    /**
+     * 是否命中带占位符的系统提示模板 (例如 "%1$s đã chặn tin nhắn."), 命中返回 true.
+     * 调用方应该传入已经 trim 过的 content.
+     */
+    private static boolean matchesSkipPattern(String trimmedContent) {
+        for (Pattern p : SKIP_SYSTEM_MESSAGE_PATTERNS) {
+            if (p.matcher(trimmedContent).matches()) return true;
+        }
+        return false;
     }
 
     private void cleanupProactiveDedupe() {
