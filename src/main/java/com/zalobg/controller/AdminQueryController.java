@@ -96,7 +96,11 @@ public class AdminQueryController {
         if (phone != null && !phone.isEmpty()) w.like(ZaloFriend::getPhone, phone);
         if (fstatus != null) w.eq(ZaloFriend::getFstatus, fstatus);
         if (deptId != null) w.eq(ZaloFriend::getDeptId, deptId);
-        w.orderByDesc(ZaloFriend::getLatestMsgTime);
+        // 按首次入库时间倒序, 最新加进来的好友排在最上面.
+        // MySQL `ORDER BY ... DESC` 默认把 NULL 排到最后 (historical 数据没有 first_collected_at 也能正常显示).
+        // 加 id DESC 作为稳定 tiebreaker, 防止 NULL 区或并列时间内分页结果跳动.
+        w.orderByDesc(ZaloFriend::getFirstCollectedAt);
+        w.orderByDesc(ZaloFriend::getId);
         IPage<ZaloFriend> p = friendMapper.selectPage(Page.of(page, size), w);
         fillMessageTotals(p.getRecords());
         return R.ok(p);

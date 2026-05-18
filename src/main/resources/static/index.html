@@ -152,7 +152,7 @@
                             <el-button @click="resetFriFilter">重置</el-button>
                         </el-form-item>
                     </el-form>
-                    <el-table :data="friList" v-loading="friLoading" border stripe size="small" height="calc(100vh - 280px)">
+                    <el-table :data="friList" v-loading="friLoading" border stripe size="small">
                         <el-table-column prop="ownerZaloId" label="归属账号" width="110"></el-table-column>
                         <el-table-column prop="friendUserId" label="好友 userId" width="130"></el-table-column>
                         <el-table-column prop="displayName" label="显示名" min-width="170"></el-table-column>
@@ -184,9 +184,11 @@
                             </template>
                         </el-table-column>
                     </el-table>
-                    <el-pagination background layout="total, prev, pager, next, jumper"
+                    <el-pagination background layout="total, sizes, prev, pager, next, jumper"
                                    :total="friTotal" :current-page="friPage" :page-size="friSize"
-                                   @current-change="loadFriends" style="margin-top:12px;justify-content:flex-end"></el-pagination>
+                                   :page-sizes="[10, 20, 50, 100]"
+                                   @current-change="loadFriends" @size-change="onFriSizeChange"
+                                   style="margin-top:12px;justify-content:flex-end"></el-pagination>
 
                     <!-- 聊天记录弹窗 -->
                     <el-dialog v-model="chatDialogVisible" :title="chatDialogTitle" width="700px" top="5vh"
