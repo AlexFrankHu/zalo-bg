@@ -4,7 +4,8 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Zalo 管理后台</title>
-    <link rel="stylesheet" href="https://unpkg.com/element-plus@2.7.7/dist/index.css"/>
+    <!-- 本地化 unpkg 依赖, 见 cdn/README — 在 mainland China unpkg.com 经常超时, 改本地引用. -->
+    <link rel="stylesheet" href="/cdn/element-plus.css"/>
     <link rel="stylesheet" href="/css/app.css"/>
 </head>
 <body>
@@ -286,10 +287,10 @@
     </el-container>
 </div>
 
-<script src="https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js"></script>
-<script src="https://unpkg.com/element-plus@2.7.7/dist/index.full.min.js"></script>
-<script src="https://unpkg.com/@element-plus/icons-vue@2.3.1/dist/index.iife.min.js"></script>
-<script src="https://unpkg.com/axios@1.7.2/dist/axios.min.js"></script>
+<script src="/cdn/vue.global.prod.js"></script>
+<script src="/cdn/element-plus.full.min.js"></script>
+<script src="/cdn/element-plus-icons.iife.min.js"></script>
+<script src="/cdn/axios.min.js"></script>
 <script src="/js/app.js"></script>
 </body>
 </html>
